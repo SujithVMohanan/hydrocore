@@ -3,3 +3,6 @@ djangorestframework==3.17.1
 python-dotenv==1.2.2
 mysqlclient==2.2.8
 python-decouple==3.8
+drf-spectacular==0.28.0
+drf-spectacular-sidecar==2024.12.1
+djangorestframework_simplejwt==5.5.1

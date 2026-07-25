@@ -10,9 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-import os
+import os, datetime
 from pathlib import Path
-from dotenv import load_dotenv, find_dotenv
+from dotenv import (
+    load_dotenv, 
+    find_dotenv
+)
 
 load_dotenv(
     find_dotenv(), 
@@ -54,7 +57,8 @@ LOCAL_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-
+    'rest_framework',
+    'drf_yasg',
 ]
 
 
@@ -177,3 +181,59 @@ AUTH_USER_MODEL = 'users.Users'
 FIXTURE_DIRS = [
     BASE_DIR / "fixtures",
 ]
+
+
+
+
+SWAGGER_SETTINGS = {
+    'DEFAULT_API_URL' : os.environ.get('SWAGGER_DEFAULT_API_URL', ""),
+    'USE_SESSION_AUTH': False,
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
+    },
+    
+}
+
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'hydrocore.exceptions.exceptions.handle_exception',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 2,
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTTokenUserAuthentication',
+    ),
+}
+
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': datetime.timedelta(days=20),
+    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(days=50),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': 'eShVmYq3t6w9z$C&E)H@McQfTjWnZr4u7x!A%D*G-JaNdRgUkXp2s5v8y/B?E(H+',
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': datetime.timedelta(days=20),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': datetime.timedelta(days=50),
+}
+    
