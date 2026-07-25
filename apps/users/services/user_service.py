@@ -6,6 +6,19 @@ from apps.users.models import Users
 class UserService:
 
     @staticmethod
+    def _resolve_user(user) -> 'Users | None':
+        
+        if user is None:
+            return None
+        if isinstance(user, Users):
+            return user
+        
+        user_id = getattr(user, 'id', None)
+        if user_id:
+            return Users.objects.filter(id=user_id).first()
+        return None
+
+    @staticmethod
     def get_users(search_query: str = None, email: str = None, full_name: str = None, user_id: int = None):
         filter_queryset = Q()
 
@@ -34,7 +47,7 @@ class UserService:
         password = data.pop('password')
         user = Users.objects.create_user(
             password=password,
-            created_by=created_by,
+            created_by=UserService._resolve_user(created_by),
             **data
         )
         return user
@@ -55,7 +68,22 @@ class UserService:
 
     @staticmethod
     @transaction.atomic
+    def create_user(validated_data: dict, created_by=None) -> Users:
+        
+        data     = validated_data.copy()
+        password = data.pop('password', None)
+
+        user = Users.objects.create_user(
+            password=password,
+            created_by=UserService._resolve_user(created_by),
+            **data
+        )
+        return user
+
+    @staticmethod
+    @transaction.atomic
     def update_user(user_id: int, validated_data: dict, updated_by=None) -> Users:
+        
         user = Users.objects.get(id=user_id)
 
         password = validated_data.pop('password', None)
@@ -66,22 +94,7 @@ class UserService:
         if password:
             user.set_password(password)
 
-        if updated_by:
-            user.updated_by = updated_by
+        user.updated_by = UserService._resolve_user(updated_by)
 
         user.save()
-
-        return user
-
-
-    @staticmethod
-    @transaction.atomic
-    def create_user(validated_data: dict, created_by=None) -> Users:
-        data     = validated_data.copy()
-        password = data.pop('password', None)
-        user = Users.objects.create_user(
-            password=password,
-            created_by=UserService._resolve_user(created_by),
-            **data
-        )
         return user

@@ -54,7 +54,7 @@ class UserDeleteSerializer(serializers.Serializer):
 
 class CreateOrUpdateUserSerializer(serializers.Serializer):
 
-    user_id        = serializers.PrimaryKeyRelatedField(required=False, queryset=Users.objects.all())
+    user_id        = serializers.IntegerField(required=False, allow_null=True)
     full_name       = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
     email           = serializers.EmailField(required=False)
     phone_number    = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)

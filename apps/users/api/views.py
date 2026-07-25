@@ -5,6 +5,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from apps.users.models import Users
 from apps.users.services.user_service import UserService
 from utils.api_utils import (
     ResponseInfo,
@@ -196,6 +197,7 @@ class CreateOrUpdateUserApiView(generics.GenericAPIView):
             "Omit `user_id` (or pass null) to **create** a new user."
         )
     )
+    
     def post(self, request, *args, **kwargs):
         try:
             user_id = request.data.get('user_id') or None
@@ -211,18 +213,30 @@ class CreateOrUpdateUserApiView(generics.GenericAPIView):
                 self.response_format['errors']      = serializer.errors
                 return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
 
+            # Strip user_id from data before passing to service
+            data = serializer.validated_data.copy()
+            data.pop('user_id', None)
+
             if user_id:
-                user = UserService.update_user(
-                    user_id=int(user_id),
-                    validated_data=serializer.validated_data,
-                    updated_by=request.user
-                )
+                
+                try:
+                    user = UserService.update_user(
+                        user_id=int(user_id),
+                        validated_data=data,
+                        updated_by=request.user
+                    )
+                except Users.DoesNotExist:
+                    self.response_format['status_code'] = status.HTTP_404_NOT_FOUND
+                    self.response_format['status']      = False
+                    self.response_format['message']     = "User not found."
+                    return Response(self.response_format, status=status.HTTP_404_NOT_FOUND)
+
                 http_status = status.HTTP_200_OK
                 message     = "User updated successfully."
 
             else:
                 user = UserService.create_user(
-                    validated_data=serializer.validated_data,
+                    validated_data=data,
                     created_by=request.user
                 )
                 http_status = status.HTTP_201_CREATED
