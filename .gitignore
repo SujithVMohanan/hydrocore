@@ -1,0 +1,15 @@
+venv
+.env
+db.sqlite3
+*.pyc
+debug.log
+
+/assets
+/media
+/media/assets
+
+*/*/migrations/*.py
+!*/*/migrations/__init__.py
+
+.idea
+/.vscode

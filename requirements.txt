@@ -1,0 +1,5 @@
+Django==6.0.7
+djangorestframework==3.17.1
+python-dotenv==1.2.2
+mysqlclient==2.2.8
+python-decouple==3.8
