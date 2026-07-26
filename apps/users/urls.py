@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.users.views import DashboardView
 
 from apps.users.api.views import (
     DeleteUsersApiView,
@@ -12,7 +13,7 @@ from apps.users.api.views import (
 urlpatterns = [
 
 
-
+    path('dashboard/', DashboardView.as_view(), name='user-dashboard'),
 
     # API Endpoints for User Management
     path('get-users/', GetUsersApiView.as_view(), name='user-list'),

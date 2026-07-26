@@ -1,0 +1,124 @@
+/* ─────────────────────────────────────────────────────────────
+   HydroCore Dashboard — Custom Styles
+   Tailwind handles layout; this file covers custom components.
+───────────────────────────────────────────────────────────── */
+
+body {
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Data Card ── */
+.data-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 12px -2px rgba(0, 94, 151, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+.dark .data-card {
+    background-color: #1e2736;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Chart wrapper ── */
+.chart-container {
+    position: relative;
+    height: 400px;
+    width: 100%;
+}
+
+/* ── Native styled select — remove default arrow ── */
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* ── DateTime input calendar icon ── */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+/* ── Active filter chips ── */
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    background: rgba(0, 94, 151, 0.08);
+    border: 1px solid rgba(0, 94, 151, 0.22);
+    color: #005e97;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    transition: all 0.15s ease;
+}
+.dark .filter-chip {
+    background: rgba(154, 203, 255, 0.12);
+    border-color: rgba(154, 203, 255, 0.28);
+    color: #9acbff;
+}
+
+/* ── Form input transitions ── */
+#dashboard-form input,
+#dashboard-form select {
+    transition: all 180ms ease;
+}
+#dashboard-form input:focus,
+#dashboard-form select:focus {
+    box-shadow: 0 0 0 3px rgba(0, 94, 151, 0.12);
+}
+
+/* ── Spinner animation ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-icon {
+    display: inline-block;
+    animation: spin 0.75s linear infinite;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c0c7d2; border-radius: 10px; }
+.dark ::-webkit-scrollbar-thumb { background: #404751; }
+
+/* ── Modal enter animation ── */
+#detectModal > div:last-child {
+    animation: modalSlideUp 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* ── Toast slide-in ── */
+#toast {
+    animation: toastSlideIn 0.22s ease;
+}
+@keyframes toastSlideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Table row hover shift (JS adds inline, this is fallback) ── */
+tbody tr {
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+/* ── Summary card number shimmer on load ── */
+@keyframes countUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+#summary-total-events,
+#summary-mean-duration,
+#summary-highest-peak {
+    transition: all 0.3s ease;
+}
