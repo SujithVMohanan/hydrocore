@@ -24,6 +24,13 @@ class RainfallEvent(BaseTimeStamps):
         db_table = "rainfall_events"
         ordering = ("-id",)
 
+        constraints = [
+            models.UniqueConstraint(
+                fields=["basin", "start_timestamp", "min_dry_gap_used"],
+                name="uq_event_basin_start_gap",
+            ),
+        ]
+
         indexes = [
             models.Index(
                 fields=[

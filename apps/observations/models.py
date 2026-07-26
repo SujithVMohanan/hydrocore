@@ -48,6 +48,13 @@ class Observation(BaseTimeStamps):
         db_table = "observations"
         ordering = ("-id",)
 
+        constraints = [
+            models.UniqueConstraint(
+                fields=["basin", "measurement_type", "timestamp"],
+                name="uq_obs_basin_type_timestamp",
+            ),
+        ]
+
         indexes = [
             models.Index(
                 fields=["basin", "measurement_type", "timestamp"],
