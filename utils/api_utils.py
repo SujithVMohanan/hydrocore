@@ -17,6 +17,22 @@ class ResponseInfo(object):
             "errors"        : args.get('errors', {}),
         }
 
+    def ok(self, data=None, message=""):
+        self.response['status_code'] = status.HTTP_200_OK
+        self.response['status'] = True
+        self.response['message'] = message
+        self.response['data'] = data if data is not None else {}
+        self.response['errors'] = {}
+        return self.response
+
+    def bad_request(self, message="", errors=None):
+        self.response['status_code'] = status.HTTP_400_BAD_REQUEST
+        self.response['status'] = False
+        self.response['message'] = message
+        self.response['errors'] = errors or {}
+        self.response['data'] = {}
+        return self.response
+
 
 
 

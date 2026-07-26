@@ -140,3 +140,54 @@ class TestDeleteRainfallEventsApi(BaseRainfallEventApiTest):
     def test_delete_rainfall_events_missing_ids_fails(self):
         response = self.auth_client_inst.delete(self.url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class TestTimeseriesAndDetectApi(BaseRainfallEventApiTest):
+    def setUp(self):
+        super().setUp()
+        self.basin = self.create_basin(name="Detect Basin")
+        # create measurement type for rainfall
+        from apps.observations.models import MeasurementType, Observation
+
+        self.mt = MeasurementType.objects.create(name="rainfall", unit="mm", created_by=self.user)
+        # create hourly observations over 10 hours with pattern: 1,2,0,0,3,4,0,5,0,0
+        now = timezone.now().replace(minute=0, second=0, microsecond=0)
+        values = [1,2,0,0,3,4,0,5,0,0]
+        self.observations = []
+        for i, v in enumerate(values):
+            ts = now - timezone.timedelta(hours=(len(values)-1-i))
+            self.observations.append(Observation.objects.create(basin=self.basin, measurement_type=self.mt, timestamp=ts, value=v, created_by=self.user))
+
+        self.timeseries_url = reverse('basin-timeseries', kwargs={"basin_id": self.basin.id})
+        self.detect_url = reverse('basin-detect-events', kwargs={"basin_id": self.basin.id})
+
+    def test_get_timeseries_requires_measurement_id(self):
+        resp = self.auth_client_inst.get(self.timeseries_url)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_get_timeseries_success(self):
+        resp = self.auth_client_inst.get(self.timeseries_url, {"measurement_id": self.mt.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.data['data']
+        self.assertIsInstance(data, dict)
+        results = data.get('data') if data.get('data') else data.get('results')
+        # Our wrapper returns data key with list
+        # When using ResponseInfo.ok, data is the list under 'data'
+        if isinstance(results, list):
+            pts = results
+        else:
+            pts = resp.data['data']
+        self.assertGreaterEqual(len(pts), 10)
+
+    def test_detect_events_creates_events(self):
+        # Use min_dry_gap_hours =2 which will split where two consecutive zeros exist
+        resp = self.auth_client_inst.post(self.detect_url + "?min_dry_gap_hours=2", {"measurement_id": self.mt.id}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data['status'])
+        result = resp.data['data']
+        self.assertIn('total_events', result)
+        self.assertGreaterEqual(result['total_events'], 1)
+        # Check persisted events
+        from apps.analytics.models import RainfallEvent
+        evs = RainfallEvent.objects.filter(basin=self.basin, min_dry_gap_used=2)
+        self.assertEqual(evs.count(), result['total_events'])

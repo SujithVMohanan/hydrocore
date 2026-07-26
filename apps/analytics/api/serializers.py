@@ -38,3 +38,10 @@ class RainfallEventResponseSchema(serializers.ModelSerializer):
 
 class RainfallEventDeleteSerializer(serializers.Serializer):
     ids = IntegerListField(required=True, help_text="Comma-separated rainfall event IDs, for example: 1,2,3")
+
+
+class DetectEventsResponseSerializer(serializers.Serializer):
+    total_events        = serializers.IntegerField()
+    scanned_from        = serializers.DateTimeField(allow_null=True)
+    scanned_to          = serializers.DateTimeField(allow_null=True)
+    min_dry_gap_hours   = serializers.IntegerField()
