@@ -53,6 +53,10 @@ urlpatterns = [
     re_path(r'^api/', include([
 
         path('users/', include('apps.users.urls')),
+        path('basin/', include('apps.basin.urls')),
+        path('observations/', include('apps.observations.urls')),
+        path('analytics/', include('apps.analytics.urls')),
+        
         
         re_path(r'^docs/', include([
             path('', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
