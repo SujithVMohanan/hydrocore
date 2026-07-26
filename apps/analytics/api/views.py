@@ -21,9 +21,10 @@ from utils.custom_exception import ExceptionHandler
 
 
 class GetRainfallEventsApiView(generics.ListAPIView):
-    serializer_class = RainfallEventResponseSchema
-    permission_classes = [IsAuthenticated]
-    pagination_class = RestPagination
+    
+    serializer_class    = RainfallEventResponseSchema
+    permission_classes  = [IsAuthenticated]
+    pagination_class    = RestPagination
 
     search = openapi.Parameter('search', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False,
                                 description="Search by basin ID, peak value, or total volume")

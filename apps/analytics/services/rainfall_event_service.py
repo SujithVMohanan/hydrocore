@@ -5,8 +5,7 @@ from django.utils import timezone
 from apps.observations.models import Observation, MeasurementType
 from apps.analytics.models import RainfallEvent
 from apps.basin.models import Basin
-
-from apps.analytics.models import RainfallEvent
+from utils.cache import CacheManager
 
 
 class RainfallEventService:
@@ -45,11 +44,16 @@ class RainfallEventService:
         if unique_id:
             filter_queryset &= Q(id=unique_id)
 
-        return RainfallEvent.objects.select_related(
-            "basin",
-            "created_by",
-            "updated_by",
-        ).filter(filter_queryset).order_by("-id")
+        def fetch_data():
+            return list(RainfallEvent.objects.select_related(
+                "basin",
+                "created_by",
+                "updated_by",
+            ).filter(filter_queryset).order_by("-id"))
+            
+        key = f"basin:{basin_id}:events:{min_dry_gap_used}:{start_timestamp}:{end_timestamp}:{search_query}:{unique_id}"
+        data, _ = CacheManager.get_or_set(key, fetch_data, timeout=3600)
+        return data
 
     @staticmethod
     @transaction.atomic
@@ -62,67 +66,67 @@ class RainfallEventService:
 
     @staticmethod
     def get_timeseries(basin_id: int, measurement_type_id: int, start_timestamp=None, end_timestamp=None):
-        filter_q = Q(basin_id=basin_id, measurement_type_id=measurement_type_id)
-        if start_timestamp:
-            filter_q &= Q(timestamp__gte=start_timestamp)
-        if end_timestamp:
-            filter_q &= Q(timestamp__lte=end_timestamp)
-
-        qs = Observation.objects.filter(filter_q).order_by("timestamp").select_related("measurement_type")
-
-        hour_map = {}
-        first_ts = None
-        last_ts = None
-        for obs in qs:
-            ts = obs.timestamp.replace(minute=0, second=0, microsecond=0)
-            if first_ts is None or ts < first_ts:
-                first_ts = ts
-            if last_ts is None or ts > last_ts:
-                last_ts = ts
-            hour_map[ts] = hour_map.get(ts, 0.0) + (obs.value or 0.0)
-
-        # If no observations, return empty list
-        if first_ts is None:
-            return []
-
-        # Determine range to return
-        start = start_timestamp or first_ts
-        end = end_timestamp or last_ts
-        start = start.replace(minute=0, second=0, microsecond=0)
-        end = end.replace(minute=0, second=0, microsecond=0)
-
-        # Preload events overlapping range for this basin
-        events = list(RainfallEvent.objects.filter(basin_id=basin_id, start_timestamp__lte=end, end_timestamp__gte=start).values("id", "start_timestamp", "end_timestamp"))
-
-        results = []
-        cur = start
-        measurement_unit = None
-        # measurement_type unit
-        try:
-            mt = MeasurementType.objects.filter(id=measurement_type_id).first()
-            if mt:
-                measurement_unit = mt.unit
-        except Exception:
+        def fetch_data():
+            filter_q = Q(basin_id=basin_id, measurement_type_id=measurement_type_id)
+            if start_timestamp:
+                filter_q &= Q(timestamp__gte=start_timestamp)
+            if end_timestamp:
+                filter_q &= Q(timestamp__lte=end_timestamp)
+    
+            qs = Observation.objects.filter(filter_q).order_by("timestamp").select_related("measurement_type")
+    
+            hour_map = {}
+            first_ts = None
+            last_ts = None
+            for obs in qs:
+                ts = obs.timestamp.replace(minute=0, second=0, microsecond=0)
+                if first_ts is None or ts < first_ts:
+                    first_ts = ts
+                if last_ts is None or ts > last_ts:
+                    last_ts = ts
+                hour_map[ts] = hour_map.get(ts, 0.0) + (obs.value or 0.0)
+    
+            if first_ts is None:
+                return []
+    
+            start = start_timestamp or first_ts
+            end = end_timestamp or last_ts
+            start = start.replace(minute=0, second=0, microsecond=0)
+            end = end.replace(minute=0, second=0, microsecond=0)
+    
+            events = list(RainfallEvent.objects.filter(basin_id=basin_id, start_timestamp__lte=end, end_timestamp__gte=start).values("id", "start_timestamp", "end_timestamp"))
+    
+            results = []
+            cur = start
             measurement_unit = None
+            try:
+                mt = MeasurementType.objects.filter(id=measurement_type_id).first()
+                if mt:
+                    measurement_unit = mt.unit
+            except Exception:
+                measurement_unit = None
+    
+            while cur <= end:
+                val = hour_map.get(cur, 0.0)
+                event_id = None
+                for ev in events:
+                    if ev["start_timestamp"] <= cur <= ev["end_timestamp"]:
+                        event_id = ev["id"]
+                        break
+    
+                results.append({
+                    "timestamp": cur,
+                    "value": val,
+                    "unit": measurement_unit or "",
+                    "rainfall_event_id": event_id,
+                })
+                cur = cur + timezone.timedelta(hours=1)
+    
+            return results
 
-        while cur <= end:
-            val = hour_map.get(cur, 0.0)
-            # find event id if any
-            event_id = None
-            for ev in events:
-                if ev["start_timestamp"] <= cur <= ev["end_timestamp"]:
-                    event_id = ev["id"]
-                    break
-
-            results.append({
-                "timestamp": cur,
-                "value": val,
-                "unit": measurement_unit or "",
-                "rainfall_event_id": event_id,
-            })
-            cur = cur + timezone.timedelta(hours=1)
-
-        return results
+        key = f"basin:{basin_id}:timeseries:{measurement_type_id}:{start_timestamp}:{end_timestamp}"
+        data, _ = CacheManager.get_or_set(key, fetch_data, timeout=3600)
+        return data
 
     @staticmethod
     @transaction.atomic
@@ -226,5 +230,7 @@ class RainfallEventService:
 
         if events_to_create:
             RainfallEvent.objects.bulk_create(events_to_create)
+
+        CacheManager.invalidate_basin_cache(basin_id)
 
         return {"total_events": len(events_to_create), "scanned_from": start, "scanned_to": end, "min_dry_gap_hours": min_dry_gap_hours}

@@ -3,6 +3,7 @@ from django.db.models import Q
 
 from apps.basin.models import Basin
 from apps.users.models import Users
+from utils.cache import CacheManager
 
 
 class BasinService:
@@ -36,7 +37,12 @@ class BasinService:
         if unique_id:
             filter_queryset &= Q(id=unique_id)
 
-        return Basin.objects.filter(filter_queryset).order_by("-id")
+        def fetch_data():
+            return list(Basin.objects.filter(filter_queryset).order_by("-id"))
+            
+        key = f"basin:list_or_summary:{search_query}:{basin_id}:{name}:{unique_id}"
+        data, _ = CacheManager.get_or_set(key, fetch_data, timeout=3600)
+        return data
 
 
     @staticmethod

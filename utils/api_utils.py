@@ -43,7 +43,7 @@ class ResponseInfo(object):
 
 class RestPagination(PageNumberPagination):
     
-    page_size = 10
+    page_size = 20
     page_size_query_param = 'limit'
     
     def __init__(self, **kwargs):

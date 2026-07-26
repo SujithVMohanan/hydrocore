@@ -8,6 +8,7 @@ from apps.observations.models import (
     MeasurementType, 
     Observation
 )
+from utils.cache import CacheManager
 
 
 class ObservationService:
@@ -128,6 +129,8 @@ class ObservationService:
             created_by=ObservationService._resolve_user(created_by),
             **data
         )
+        if observation.basin_id:
+            CacheManager.invalidate_basin_cache(observation.basin_id)
         return observation
 
 
@@ -141,6 +144,8 @@ class ObservationService:
 
         observation.updated_by = ObservationService._resolve_user(updated_by)
         observation.save()
+        if observation.basin_id:
+            CacheManager.invalidate_basin_cache(observation.basin_id)
         return observation
 
 
