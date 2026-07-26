@@ -55,6 +55,7 @@ LOCAL_APPS = [
     "apps.users",
     "apps.basin",
     "apps.observations",
+    "apps.analytics",
     
 ]
 
