@@ -44,65 +44,20 @@ class UserManager(BaseUserManager):
 
 class Users(AbstractBaseUser, PermissionsMixin):
 
-    uuid = models.UUIDField(
-        default=uuid.uuid4,
-        editable=False,
-        unique=True
-    )
+    uuid          = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    full_name     = models.CharField(_("Full Name"), max_length=255, blank=True, null=True)
+    phone_number  = models.CharField(_("Phone Number"), max_length=20, unique=True, blank=True, null=True)
+    email         = models.EmailField(_("Email Address"), max_length=255, unique=True)
+    profile_image = models.FileField(_("Profile Image"), upload_to='users/profile/', blank=True, null=True)
 
-    full_name = models.CharField(_("Full Name"),
-        max_length=255,
-        blank=True,
-        null=True
-    )
-
-    phone_number = models.CharField(_("Phone Number"),
-        max_length=20,
-        unique=True,
-        blank=True,
-        null=True
-    )
-
-    email = models.EmailField(_("Email Address"),
-        max_length=255,
-        unique=True
-    )
-
-    profile_image = models.FileField(_("Profile Image"),
-        upload_to='users/profile/',
-        blank=True,
-        null=True
-    )
-
-    
     is_active = models.BooleanField(_("Is Active"), default=True)
     is_staff  = models.BooleanField(_("Is Staff"), default=False)
 
-    
-    
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    updated_at = models.DateTimeField(
-        auto_now=True
-    )
-
-    created_by = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name='created_users'
-    )
-
-    updated_by = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        related_name='updated_users'
-    )
+    created_by = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True, related_name='created_users')
+    updated_by = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True, related_name='updated_users')
 
   
     objects = UserManager()

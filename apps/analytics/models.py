@@ -8,64 +8,17 @@ from apps.users.models import (
 
 class RainfallEvent(BaseTimeStamps):
 
-    basin = models.ForeignKey(
-        "basin.Basin",
-        on_delete=models.CASCADE,
-        related_name="rainfall_events",
-        verbose_name=_("Basin"),
-    )
+    basin            = models.ForeignKey("basin.Basin", on_delete=models.CASCADE, related_name="rainfall_events", verbose_name=_("Basin"))
+    start_timestamp  = models.DateTimeField(_("Start Time"), help_text=_("Rainfall event start time"))
+    end_timestamp    = models.DateTimeField(_("End Time"), help_text=_("Rainfall event end time"))
+    duration_hours   = models.PositiveIntegerField(_("Duration (Hours)"), help_text=_("Total duration of the rainfall event in hours"))
+    peak_value       = models.FloatField(_("Peak Rainfall"), help_text=_("Maximum rainfall intensity (mm/hr)"))
+    total_volume     = models.FloatField(_("Total Rainfall"), help_text=_("Total cumulative rainfall (mm)"))
+    min_dry_gap_used = models.PositiveSmallIntegerField(_("Minimum Dry Gap"), help_text=_("Dry gap parameter used (hours)"))
+    is_cold_event    = models.BooleanField(_("Cold Event"), default=False, help_text=_("True if mean temperature is below 0°C"))
 
-    start_timestamp = models.DateTimeField(
-        _("Start Time"),
-        help_text=_("Rainfall event start time"),
-    )
-
-    end_timestamp = models.DateTimeField(
-        _("End Time"),
-        help_text=_("Rainfall event end time"),
-    )
-
-    duration_hours = models.PositiveIntegerField(
-        _("Duration (Hours)"),
-        help_text=_("Total duration of the rainfall event in hours"),
-    )
-
-    peak_value = models.FloatField(
-        _("Peak Rainfall"),
-        help_text=_("Maximum rainfall intensity (mm/hr)"),
-    )
-
-    total_volume = models.FloatField(
-        _("Total Rainfall"),
-        help_text=_("Total cumulative rainfall (mm)"),
-    )
-
-    min_dry_gap_used = models.PositiveSmallIntegerField(
-        _("Minimum Dry Gap"),
-        help_text=_("Dry gap parameter used (hours)"),
-    )
-
-    is_cold_event = models.BooleanField(
-        _("Cold Event"),
-        default=False,
-        help_text=_("True if mean temperature is below 0°C"),
-    )
-
-    created_by = models.ForeignKey(
-        "users.Users",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="rainfall_events_created",
-    )
-
-    updated_by = models.ForeignKey(
-        "users.Users",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="rainfall_events_updated",
-    )
+    created_by       = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="rainfall_events_created")
+    updated_by       = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="rainfall_events_updated")
 
     class Meta:
         db_table = "rainfall_events"

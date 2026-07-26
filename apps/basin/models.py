@@ -7,46 +7,13 @@ from apps.users.models import (
 
 
 class Basin(BaseTimeStamps):
-    basin_id = models.CharField(
-        _("Basin ID"),
-        max_length=20,
-        unique=True,
-        db_index=True,
-        editable=False,
-        blank=True,
-    )
 
-    name = models.CharField(
-        _("Basin Name"),
-        max_length=100,
-        blank=True,
-        null=True,
-        db_index=True,
-        help_text="Optional basin name",
-    )
+    basin_id    = models.CharField(_("Basin ID"), max_length=20, unique=True, db_index=True, editable=False, blank=True)
+    name        = models.CharField(_("Basin Name"), max_length=100, blank=True, null=True, db_index=True, help_text="Optional basin name")
+    metadata    = models.JSONField(_("Basin Metadata"), default=dict, blank=True, help_text="Additional basin information")
 
-    metadata = models.JSONField(
-        _("Basin Metadata"),
-        default=dict,
-        blank=True,
-        help_text="Additional basin information",
-    )
-
-    created_by = models.ForeignKey(
-        "users.Users",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="created_basins",
-    )
-
-    updated_by = models.ForeignKey(
-        "users.Users",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="updated_basins",
-    )
+    created_by  = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_basins")
+    updated_by  = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="updated_basins")
 
     class Meta:
         db_table = "basins"

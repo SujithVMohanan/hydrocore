@@ -8,36 +8,10 @@ from apps.users.models import (
 
 class MeasurementType(BaseTimeStamps):
     
-    name = models.CharField(
-        _("Measurement Type"),
-        max_length=50,
-        db_index=True,
-        help_text=_("Unique measurement type name"),
-    )
-
-    unit = models.CharField(
-        _("Unit"),
-        max_length=20,
-        help_text=_("Measurement unit (e.g., mm, °C, m/s)"),
-    )
-
-
-    created_by = models.ForeignKey(
-        "users.Users",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="measurement_types_created",
-    )
-
-
-    updated_by = models.ForeignKey(
-        "users.Users",  
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True, 
-        related_name="measurement_types_updated",
-    )
+    name        = models.CharField(_("Measurement Type"), max_length=50, db_index=True, help_text=_("Unique measurement type name"))
+    unit        = models.CharField(_("Unit"), max_length=20, help_text=_("Measurement unit (e.g., mm, °C, m/s)"))
+    created_by  = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="measurement_types_created")
+    updated_by  = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="measurement_types_updated")
 
 
     class Meta:
@@ -61,53 +35,14 @@ class MeasurementType(BaseTimeStamps):
     
 class Observation(BaseTimeStamps):
    
-    basin = models.ForeignKey(
-        "basin.Basin",
-        on_delete=models.CASCADE,
-        related_name="observations",
-        verbose_name=_("Basin"),
-    )
+    basin            = models.ForeignKey("basin.Basin", on_delete=models.CASCADE, related_name="observations", verbose_name=_("Basin"))
+    measurement_type = models.ForeignKey(MeasurementType, on_delete=models.CASCADE, related_name="observations", verbose_name=_("Measurement Type"))
+    timestamp        = models.DateTimeField(_("Observation Timestamp"), db_index=True, help_text=_("Date and time of the observation"))
+    value            = models.FloatField(_("Value"), help_text=_("Observed measurement value"))
+    source           = models.CharField(_("Source"), max_length=100, default="CSV_Ingest", help_text=_("Source of the observation data"))
 
-    measurement_type = models.ForeignKey(
-        MeasurementType,
-        on_delete=models.CASCADE,
-        related_name="observations",
-        verbose_name=_("Measurement Type"),
-    )
-
-    timestamp = models.DateTimeField(
-        _("Observation Timestamp"),
-        db_index=True,
-        help_text=_("Date and time of the observation"),
-    )
-
-    value = models.FloatField(
-        _("Value"),
-        help_text=_("Observed measurement value"),
-    )
-
-    source = models.CharField(
-        _("Source"),
-        max_length=100,
-        default="CSV_Ingest",
-        help_text=_("Source of the observation data"),
-    )
-
-    created_by = models.ForeignKey(
-        "users.Users",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="created_observations",
-    )
-
-    updated_by = models.ForeignKey(
-        "users.Users",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="updated_observations",
-    )
+    created_by       = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_observations")
+    updated_by       = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="updated_observations")
 
     class Meta:
         db_table = "observations"
