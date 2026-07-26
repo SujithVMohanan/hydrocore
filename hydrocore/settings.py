@@ -53,6 +53,7 @@ ALLOWED_HOSTS = os.environ.get(
 LOCAL_APPS = [
 
     "apps.users",
+    "apps.basin",
     
 ]
 
