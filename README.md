@@ -960,6 +960,247 @@ python -m pytest
 
 ---
 
+## 17. Celery ingest jobs (design guide, not implemented)
+
+How Celery should work with the **ingest API** and the **`ingest_jobs`** control table.
+
+This section is a design guide. It describes the target flow; Celery code may still need to be implemented separately.
+
+### Big idea (simple)
+
+1. Client calls **ingest API**
+2. API **creates one row** in `ingest_jobs` for that request (stores all details)
+3. API returns response with that job info (**does not run heavy ingest yet**)
+4. **Every 1 minute**, Celery looks for jobs with status **`pending`**
+5. For each pending job:
+   - status → **`in_queue`**
+   - worker starts → status → **`started`**
+   - runs the **common ingest function** (`IngestionService`)
+   - if OK → status → **`completed`**
+   - if error → status → **`failed`** (recommended)
+
+One API call = **one `ingest_jobs` object**.  
+That object’s status is updated step by step until it finishes.
+
+### Status flow (per job object)
+
+```
+API creates job
+      │
+      ▼
+  pending          ← waiting in DB
+      │
+      │  Celery Beat (every 1 minute) picks this job
+      ▼
+  in_queue         ← claimed / sent to worker
+      │
+      │  Worker picks the job
+      ▼
+  started          ← ingest function is running
+      │
+      ├──────────────►  completed   ← success
+      │
+      └──────────────►  failed      ← error (store message)
+```
+
+| Status | When it is set | Who sets it |
+|--------|----------------|-------------|
+| `pending` | Right after ingest API creates the row | API |
+| `in_queue` | When the minute-job claims this pending row | Celery Beat / dispatcher |
+| `started` | When worker begins running ingest | Celery Worker |
+| `completed` | When common ingest function finishes OK | Celery Worker |
+| `failed` | When ingest raises an error | Celery Worker |
+
+Each object in `ingest_jobs` follows this path independently.
+
+### What happens when ingest API is called
+
+**Endpoint**
+
+```http
+POST /api/observations/ingest/
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+```
+
+Form fields:
+
+- `rainfall_file` (optional)
+- `temperature_file` (optional)
+- `auto_create_basins` (optional, default true)
+
+**API steps (target design)**
+
+1. Validate request (at least one CSV, `.csv` only, etc.)
+2. Save uploaded file(s) to disk (e.g. `media/ingest_jobs/<uuid>/`)
+3. **Create one `ingest_jobs` object** with:
+   - all file paths / names
+   - `auto_create_basins`
+   - `job_type` (`rainfall` / `temperature` / `both`)
+   - `created_by`
+   - **`status = pending`**
+4. Return API response including that job’s id / uuid / status  
+   (HTTP **202 Accepted** is a good fit)
+
+**Example API response**
+
+```json
+{
+  "status": true,
+  "status_code": 202,
+  "message": "Ingest job created. It will run when pending jobs are processed.",
+  "data": {
+    "job_id": 15,
+    "job_uuid": "a1b2c3d4-....",
+    "job_status": "pending",
+    "job_type": "both"
+  },
+  "errors": []
+}
+```
+
+**Important:** The API does **not** call `IngestionService` here.  
+It only **creates the control object** and returns.
+
+### What lives in `ingest_jobs` (one row per API call)
+
+| Field | Stored from API call |
+|-------|----------------------|
+| `job_uuid` | New unique id |
+| `job_type` | rainfall / temperature / both |
+| `status` | starts as `pending` |
+| `rainfall_file` | saved path (if uploaded) |
+| `temperature_file` | saved path (if uploaded) |
+| `rainfall_original_name` | original filename |
+| `temperature_original_name` | original filename |
+| `auto_create_basins` | from request |
+| `created_by` | logged-in user |
+| `celery_task_id` | filled later when queued |
+| `error_message` | filled only on failure |
+| `started_at` / `completed_at` | filled by worker |
+
+**API call → create object in `ingest_jobs` → that object is the source of truth for this ingest request.**
+
+### Every minute: process pending jobs
+
+Celery Beat runs **once every minute**.
+
+**Dispatcher task (every minute)**
+
+For all (or a batch of) rows where `status = pending`:
+
+1. Change that object: **`pending` → `in_queue`**
+2. Send worker task for that object: `run_ingest_job(job_id)`
+3. Save `celery_task_id` on the object
+
+Example batch: take up to 10 pending jobs per minute so one minute does not overload the worker.
+
+**Worker task (per object)**
+
+For **each** job object:
+
+1. Change status: **`in_queue` → `started`**
+2. Set `started_at`
+3. Run the **common ingest function(s)**:
+   - if rainfall file exists → `IngestionService.ingest_rainfall(...)`
+   - if temperature file exists → `IngestionService.ingest_temperature(...)`
+4. On success:
+   - status → **`completed`**
+   - set `completed_at`
+5. On error:
+   - status → **`failed`**
+   - save `error_message`
+
+Same common ingest code as today — Celery only controls **when** it runs and **updates status** on the `ingest_jobs` row.
+
+### End-to-end example
+
+| Time | Event | `ingest_jobs.status` |
+|------|--------|----------------------|
+| 10:00:05 | User calls ingest API | row created → `pending` |
+| 10:00:05 | API returns job_id=15 | still `pending` |
+| 10:01:00 | Beat finds job 15 | `pending` → `in_queue` |
+| 10:01:01 | Worker starts job 15 | `in_queue` → `started` |
+| 10:01:45 | Ingest finishes OK | `started` → `completed` |
+
+If another user calls ingest at 10:00:20, that creates **another** row (job 16), also `pending`.  
+At 10:01:00 Beat can claim **both** pending objects; each goes `in_queue` → `started` → `completed` separately.
+
+### Common ingest function (do not duplicate)
+
+Worker should call existing service methods only:
+
+```text
+IngestionService.ingest_rainfall(file, auto_create_basins=..., created_by=...)
+IngestionService.ingest_temperature(file, auto_create_basins=..., created_by=...)
+```
+
+Celery / `ingest_jobs` only:
+
+- store request details
+- drive status: pending → in_queue → started → completed
+- decide **when** to run
+
+### Optional: check job status later
+
+```http
+GET /api/observations/ingest-jobs/{job_id}/
+Authorization: Bearer <token>
+```
+
+Returns the same object’s current status (`pending` / `in_queue` / `started` / `completed` / `failed`).
+
+### How to run (after code is implemented)
+
+```bash
+# 1) Redis must be running
+
+# 2) Django API
+python manage.py runserver
+
+# 3) Celery worker (runs ingest, updates started/completed)
+celery -A hydrocore worker -l info
+
+# 4) Celery Beat (every minute: pending → in_queue)
+celery -A hydrocore beat -l info
+```
+
+| Process | Role in this flow |
+|---------|-------------------|
+| API | Creates `ingest_jobs` object as `pending` |
+| Beat | Each minute: pending → in_queue + enqueue worker |
+| Worker | Each object: started → run ingest → completed/failed |
+
+### Files needed when implementing (reference)
+
+| Piece | Purpose |
+|-------|---------|
+| `IngestJob` model / `ingest_jobs` table | One object per ingest API call |
+| Ingest API change | Create pending object + return it |
+| `IngestJobService` | create / claim pending / execute + update status |
+| Celery Beat task | Every minute process `pending` |
+| Celery Worker task | Per object: started → common ingest → completed |
+| `hydrocore/celery.py` + settings | Celery app + 60s schedule |
+| `celery` in `requirements.txt` | Dependency |
+
+Suggested Redis split:
+
+- Cache (existing): `redis://127.0.0.1:6379/1`
+- Celery broker: `redis://127.0.0.1:6379/0`
+
+### Short summary
+
+| Step | Action | Status on that `ingest_jobs` object |
+|------|--------|-------------------------------------|
+| 1 | Ingest API called | Create object → **`pending`** |
+| 2 | Every minute Beat runs | That object → **`in_queue`** |
+| 3 | Worker starts | That object → **`started`** |
+| 4 | Common ingest function finishes | That object → **`completed`** (or **`failed`**) |
+
+**API creates objects. Celery updates their status and runs the common ingest function.**
+
+---
+
 ## Quick checklist
 
 1. Install packages  
