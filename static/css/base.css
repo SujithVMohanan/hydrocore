@@ -1,0 +1,100 @@
+/* ─────────────────────────────────────────────────────────────
+   HydroCore — Base Design Tokens & Layout
+───────────────────────────────────────────────────────────── */
+
+:root {
+    --color-primary: #005e97;
+    --color-primary-light: #0077be;
+    --color-primary-soft: rgba(0, 94, 151, 0.08);
+    --color-tertiary: #27654a;
+    --color-tertiary-soft: rgba(39, 101, 74, 0.1);
+    --color-error: #ba1a1a;
+    --color-error-soft: rgba(186, 26, 26, 0.08);
+    --color-warning: #d97706;
+
+    --color-bg: #f4f7fb;
+    --color-surface: #ffffff;
+    --color-surface-alt: #eef3fa;
+    --color-border: #d8e0ec;
+    --color-text: #161c27;
+    --color-text-muted: #5a6578;
+    --color-text-light: #8898b0;
+
+    --shadow-sm: 0 1px 3px rgba(0, 40, 80, 0.06);
+    --shadow-md: 0 4px 16px rgba(0, 40, 80, 0.08);
+    --shadow-lg: 0 8px 32px rgba(0, 40, 80, 0.12);
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+
+    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --container-max: 1280px;
+    --header-height: 64px;
+
+    --transition: 180ms ease;
+}
+
+.dark {
+    --color-bg: #141a24;
+    --color-surface: #1e2736;
+    --color-surface-alt: #252f40;
+    --color-border: rgba(255, 255, 255, 0.1);
+    --color-text: #ecf0ff;
+    --color-text-muted: #8898b0;
+    --color-text-light: #6b7a94;
+    --color-primary-soft: rgba(154, 203, 255, 0.12);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+    margin: 0;
+    font-family: var(--font-family);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--color-text);
+    background: var(--color-bg);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    transition: background var(--transition), color var(--transition);
+}
+
+.container {
+    width: 100%;
+    max-width: var(--container-max);
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+@media (max-width: 640px) {
+    .container { padding: 0 16px; }
+}
+
+/* Material icons helper */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    vertical-align: middle;
+}
+.material-symbols-outlined.filled {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-icon {
+    display: inline-block;
+    animation: spin 0.75s linear infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 10px; }

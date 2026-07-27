@@ -36,16 +36,13 @@ class DashboardService:
 
         if rainfall_mt:
 
-            try:
-                RainfallEventService.detect_and_persist_events(
-                    basin_id=basin_id,
-                    min_dry_gap_hours=min_dry_gap_hours,
-                    measurement_type_id=rainfall_mt.id,
-                    start_timestamp=start_date if start_date else None,
-                    end_timestamp=end_date if end_date else None
-                )
-            except Exception as e:
-                pass
+            RainfallEventService.detect_and_persist_events(
+                basin_id=basin_id,
+                min_dry_gap_hours=min_dry_gap_hours,
+                measurement_type_id=rainfall_mt.id,
+                start_timestamp=start_date if start_date else None,
+                end_timestamp=end_date if end_date else None
+            )
 
             rainfall_timeseries = RainfallEventService.get_timeseries(
                 basin_id=basin_id,
@@ -67,7 +64,8 @@ class DashboardService:
             events_qs = events_qs.order_by('-start_timestamp')
             
             events_list = list(events_qs.values(
-                'id', 'start_timestamp', 'end_timestamp', 'duration_hours', 'peak_value', 'total_volume'
+                'id', 'start_timestamp', 'end_timestamp', 'duration_hours',
+                'peak_value', 'total_volume', 'is_cold_event',
             ))
 
             for ev in events_list:

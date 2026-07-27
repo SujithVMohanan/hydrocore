@@ -1,0 +1,132 @@
+<section class="card chart-card-wrap" style="position:relative;">
+    <div class="card__header chart-header">
+        <div class="card__header-left">
+            <span class="material-symbols-outlined" style="color:#2563eb;">monitoring</span>
+            <div>
+                <h2 class="card__title">Environmental Data Charts</h2>
+                <p class="card__subtitle" id="chartSectionSubtitle">Switch between separate or combined view</p>
+            </div>
+        </div>
+        <div class="chart-layout-toggle" role="group" aria-label="Chart layout">
+            <button type="button" class="layout-btn active" data-chart-layout="split" title="Two separate charts">
+                <span class="material-symbols-outlined">view_column</span>
+                Separate
+            </button>
+            <button type="button" class="layout-btn" data-chart-layout="combined" title="Rainfall + temperature in one chart">
+                <span class="material-symbols-outlined">stacked_line_chart</span>
+                Combined
+            </button>
+        </div>
+    </div>
+
+    <div class="chart-legend-bar">
+        <p class="chart-legend-bar__heading">Color guide</p>
+        <div class="chart-legend-bar__items">
+            <div class="chart-legend-bar__item">
+                <span class="legend-swatch legend-swatch--rain"></span>
+                <span><strong>Rainfall</strong> — blue bars (<b>mm</b>)</span>
+            </div>
+            <div class="chart-legend-bar__item">
+                <span class="legend-swatch legend-swatch--temp"></span>
+                <span><strong>Temperature</strong> — orange line (<b>°C</b>)</span>
+            </div>
+            <div class="chart-legend-bar__item">
+                <span class="legend-swatch legend-swatch--event"></span>
+                <span><strong>Yellow shade</strong> — normal rain event</span>
+            </div>
+            <div class="chart-legend-bar__item">
+                <span class="legend-swatch legend-swatch--heavy"></span>
+                <span><strong>Light green shade</strong> — heavy rain (peak ≥ 10 mm/hr)</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-toolbar">
+        <div class="chart-toolbar__group">
+            <span class="chart-toolbar__label">Group data by</span>
+            <div class="chart-pills">
+                <button type="button" class="chart-pill active" data-chart-view="daily">
+                    <span class="material-symbols-outlined">today</span>Daily
+                </button>
+                <button type="button" class="chart-pill" data-chart-view="monthly">
+                    <span class="material-symbols-outlined">calendar_month</span>Monthly
+                </button>
+                <button type="button" class="chart-pill" data-chart-view="yearly">
+                    <span class="material-symbols-outlined">date_range</span>Yearly
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Separate charts -->
+    <div class="card__body chart-split-body" id="chartSplitView">
+        <div class="chart-panel chart-panel--rain">
+            <div class="chart-panel__head">
+                <div class="chart-panel__title">
+                    <span class="chart-panel__badge chart-panel__badge--rain">
+                        <span class="material-symbols-outlined">water_drop</span>
+                    </span>
+                    <div>
+                        <h3>Rainfall</h3>
+                        <p id="rainChartSubtitle">Total precipitation per period (mm)</p>
+                    </div>
+                </div>
+                <div class="chart-panel__stat" id="rainChartStat">—</div>
+            </div>
+            <div class="chart-wrap chart-wrap--sm">
+                <div id="rainChartEmpty" class="chart-empty"><p>Run analysis to see rainfall data</p></div>
+                <canvas id="rainfallChart" class="hidden"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-panel chart-panel--temp">
+            <div class="chart-panel__head">
+                <div class="chart-panel__title">
+                    <span class="chart-panel__badge chart-panel__badge--temp">
+                        <span class="material-symbols-outlined">thermostat</span>
+                    </span>
+                    <div>
+                        <h3>Temperature</h3>
+                        <p id="tempChartSubtitle">Average temperature per period (°C)</p>
+                    </div>
+                </div>
+                <div class="chart-panel__stat" id="tempChartStat">—</div>
+            </div>
+            <div class="chart-wrap chart-wrap--sm">
+                <div id="tempChartEmpty" class="chart-empty"><p>Run analysis to see temperature data</p></div>
+                <canvas id="temperatureChart" class="hidden"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Combined chart -->
+    <div class="card__body chart-combined-body hidden" id="chartCombinedView">
+        <div class="chart-panel chart-panel--combined">
+            <div class="chart-panel__head">
+                <div class="chart-panel__title">
+                    <span class="chart-panel__badge chart-panel__badge--combined">
+                        <span class="material-symbols-outlined">ssid_chart</span>
+                    </span>
+                    <div>
+                        <h3>Rainfall + Temperature</h3>
+                        <p id="combinedChartSubtitle">Blue bars = rain · Orange line = temp · Yellow = event · Green = heavy rain</p>
+                    </div>
+                </div>
+                <div class="chart-panel__stats-row">
+                    <div class="chart-panel__stat" id="combinedRainStat">—</div>
+                    <div class="chart-panel__stat" id="combinedTempStat">—</div>
+                </div>
+            </div>
+            <div class="chart-wrap chart-wrap--combined">
+                <div id="combinedChartEmpty" class="chart-empty">
+                    <p>Run analysis to see combined chart</p>
+                </div>
+                <canvas id="combinedChart" class="hidden"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="chartLoading" class="chart-loading chart-loading--global hidden">
+        <span class="material-symbols-outlined spinner-icon" style="font-size:32px;color:#2563eb;">progress_activity</span>
+    </div>
+</section>
