@@ -15,9 +15,7 @@ from apps.basin.api.serializers import (
     BasinCreateUpdateSerializer,
     BasinDeleteSerializer,
 )
-from apps.basin.api.sechams import (
-    BasinResponseSchemas,
-)
+from apps.basin.api.schemas import BasinListSchema
 
 from utils.custom_exception import ExceptionHandler
 
@@ -25,7 +23,7 @@ from utils.custom_exception import ExceptionHandler
 
 class GetBasinsApiView(generics.ListAPIView):
 
-    serializer_class    = BasinResponseSchemas
+    serializer_class    = BasinListSchema
     permission_classes  = [IsAuthenticated]
     pagination_class    = RestPagination
     search              = openapi.Parameter('search', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False,
@@ -62,13 +60,13 @@ class CreateOrUpdateBasinApiView(generics.GenericAPIView):
         super(CreateOrUpdateBasinApiView, self).__init__(**kwargs)
 
     serializer_class   = BasinCreateUpdateSerializer
-    response_schema    = BasinResponseSchemas
+    response_schema    = BasinListSchema
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         tags=["Basin"],
         request_body=BasinCreateUpdateSerializer,
-        responses={200: BasinResponseSchemas, 201: BasinResponseSchemas},
+        responses={200: BasinListSchema, 201: BasinListSchema},
         operation_summary="Create or Update Basin",
         operation_description=(
             "Pass `id` in the request body to **update** an existing basin.\n\n"

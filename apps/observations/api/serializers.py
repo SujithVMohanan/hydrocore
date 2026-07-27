@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.basin.models import Basin
-from apps.observations.models import MeasurementType, Observation
+from apps.observations.models import MeasurementType
 from utils.integer_list_field import IntegerListField
 
 
@@ -48,9 +48,10 @@ class MeasurementTypeDeleteSerializer(serializers.Serializer):
 
 
 class IngestObservationsSerializer(serializers.Serializer):
-    rainfall_file = serializers.FileField(required=False, allow_empty_file=False)
-    temperature_file = serializers.FileField(required=False, allow_empty_file=False)
-    auto_create_basins = serializers.BooleanField(required=False, default=True)
+
+    rainfall_file       = serializers.FileField(required=False, allow_empty_file=False)
+    temperature_file    = serializers.FileField(required=False, allow_empty_file=False)
+    auto_create_basins  = serializers.BooleanField(required=False, default=True)
 
     MAX_CSV_BYTES = 200 * 1024 * 1024  # 200 MB
 

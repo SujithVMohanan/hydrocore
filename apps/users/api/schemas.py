@@ -1,9 +1,10 @@
 from rest_framework import serializers
+
 from apps.users.models import Users
 
 
 class GetUsersApiSchema(serializers.ModelSerializer):
-    
+
     class Meta:
         model = Users
         fields = [
@@ -21,20 +22,16 @@ class GetUsersApiSchema(serializers.ModelSerializer):
             'updated_by',
         ]
 
-        
     def to_representation(self, instance):
-        datas = super().to_representation(instance)
-        for key in datas.keys():
-            try:
-                if datas[key] is None:
-                    datas[key] = ""
-            except KeyError:
-                pass
-        return datas
+        data = super().to_representation(instance)
+        for key, value in data.items():
+            if value is None:
+                data[key] = ""
+        return data
 
 
 class RegisterUserResponseSchema(serializers.ModelSerializer):
-    
+
     class Meta:
         model = Users
         fields = [
@@ -47,19 +44,16 @@ class RegisterUserResponseSchema(serializers.ModelSerializer):
             'is_superuser',
         ]
 
-        
     def to_representation(self, instance):
-        datas = super().to_representation(instance)
-        for key in datas.keys():
-            try:
-                if datas[key] is None:
-                    datas[key] = ""
-            except KeyError:
-                pass
-        return datas
+        data = super().to_representation(instance)
+        for key, value in data.items():
+            if value is None:
+                data[key] = ""
+        return data
 
 
 class CreateOrUpdateUserResponseSchema(serializers.ModelSerializer):
+
     class Meta:
         model = Users
         fields = [
@@ -78,11 +72,8 @@ class CreateOrUpdateUserResponseSchema(serializers.ModelSerializer):
         ]
 
     def to_representation(self, instance):
-        datas = super().to_representation(instance)
-        for key in datas.keys():
-            try:
-                if datas[key] is None:
-                    datas[key] = ""
-            except KeyError:
-                pass
-        return datas
+        data = super().to_representation(instance)
+        for key, value in data.items():
+            if value is None:
+                data[key] = ""
+        return data

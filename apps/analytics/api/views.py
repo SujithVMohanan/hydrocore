@@ -4,14 +4,16 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.response import Response
 
-from apps.analytics.api.sechams import TimeseriesPointSchemas
 from apps.analytics.services.rainfall_event_service import RainfallEventService
+from apps.analytics.api.schemas import (
+    EventComparisonSchema,
+    EventSummarySchema,
+    RainfallEventSchema,
+    TimeseriesPointSchema,
+)
 from apps.analytics.api.serializers import (
-    RainfallEventResponseSchema,
-    RainfallEventDeleteSerializer,
     DetectEventsResponseSerializer,
-    EventComparisonResponseSerializer,
-    EventSummaryResponseSerializer,
+    RainfallEventDeleteSerializer,
 )
 from utils.api_utils import (
     ResponseInfo, 
@@ -24,7 +26,7 @@ from utils.custom_exception import ExceptionHandler
 
 class GetRainfallEventsApiView(generics.ListAPIView):
     
-    serializer_class    = RainfallEventResponseSchema
+    serializer_class    = RainfallEventSchema
     permission_classes  = [IsAuthenticated]
     pagination_class    = RestPagination
 
@@ -101,7 +103,7 @@ class DeleteRainfallEventsApiView(generics.DestroyAPIView):
 
 class GetTimeseriesApiView(generics.ListAPIView):
 
-    serializer_class    = TimeseriesPointSchemas
+    serializer_class    = TimeseriesPointSchema
     permission_classes  = [IsAuthenticated]
     pagination_class    = RestPagination
 
@@ -129,6 +131,7 @@ class GetTimeseriesApiView(generics.ListAPIView):
             return super().get(request, *args, **kwargs)
         except Exception as e:
             return ExceptionHandler.handle(e)
+
 
     def get_queryset(self, *args, **kwargs):
         measurement_id    = self.request.query_params.get('measurement_id')
@@ -209,7 +212,7 @@ class DetectRainfallEventsApiView(generics.GenericAPIView):
 class BasinEventSummaryApiView(generics.GenericAPIView):
 
     permission_classes = [IsAuthenticated]
-    serializer_class = EventSummaryResponseSerializer
+    serializer_class   = EventSummarySchema
 
     def __init__(self, **kwargs):
         self.response_format = ResponseInfo().response
@@ -231,11 +234,11 @@ class BasinEventSummaryApiView(generics.GenericAPIView):
             'Return aggregate statistics for detected rainfall events in a basin: '
             'total count, mean duration, mean volume, peak event, and longest event.'
         ),
-        responses={200: EventSummaryResponseSerializer()},
+        responses={200: EventSummarySchema()},
     )
     def get(self, request, basin_id, *args, **kwargs):
         try:
-            min_dry_gap = request.query_params.get('min_dry_gap_hours')
+            min_dry_gap       = request.query_params.get('min_dry_gap_hours')
             min_dry_gap_hours = int(min_dry_gap) if min_dry_gap not in (None, '') else None
 
             result = RainfallEventService.get_event_summary(
@@ -259,9 +262,9 @@ class BasinEventSummaryApiView(generics.GenericAPIView):
 
 class EventTimeseriesApiView(generics.ListAPIView):
 
-    serializer_class = TimeseriesPointSchemas
-    permission_classes = [IsAuthenticated]
-    pagination_class = RestPagination
+    serializer_class    = TimeseriesPointSchema
+    permission_classes  = [IsAuthenticated]
+    pagination_class    = RestPagination
 
     @swagger_auto_schema(
         tags=['RainfallEvents'],
@@ -277,8 +280,8 @@ class EventTimeseriesApiView(generics.ListAPIView):
 
 class EventComparisonApiView(generics.GenericAPIView):
 
-    permission_classes = [IsAuthenticated]
-    serializer_class = EventComparisonResponseSerializer
+    permission_classes    = [IsAuthenticated]
+    serializer_class      = EventComparisonSchema
 
     def __init__(self, **kwargs):
         self.response_format = ResponseInfo().response
@@ -296,7 +299,7 @@ class EventComparisonApiView(generics.GenericAPIView):
         tags=['RainfallEvents'],
         manual_parameters=[gaps],
         operation_summary='Compare event summaries across multiple dry-gap values',
-        responses={200: EventComparisonResponseSerializer()},
+        responses={200: EventComparisonSchema()},
     )
     def get(self, request, basin_id, *args, **kwargs):
         try:

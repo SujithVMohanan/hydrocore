@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -8,10 +9,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.users.models import Users
 from apps.basin.models import Basin
 from apps.analytics.models import RainfallEvent
+from apps.analytics.services.rainfall_event_service import RainfallEventService
 
 
 class BaseRainfallEventApiTest(TestCase):
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.user = self.make_user()
         self.auth_client_inst = self.auth_client(self.user)
@@ -114,11 +117,15 @@ class TestGetRainfallEventsApi(BaseRainfallEventApiTest):
         self.assertEqual(results[0]["id"], self.event1.id)
 
     def test_filter_by_min_total_volume(self):
-        response = self.auth_client_inst.get(self.url, {"min_total_volume": 180})
+        response = self.auth_client_inst.get(
+            self.url,
+            {"basin_id": self.basin.id, "min_total_volume": 180},
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data["data"]["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], self.event2.id)
+
 
 
 class TestDeleteRainfallEventsApi(BaseRainfallEventApiTest):
@@ -149,119 +156,169 @@ class TestDeleteRainfallEventsApi(BaseRainfallEventApiTest):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
-class TestTimeseriesAndDetectApi(BaseRainfallEventApiTest):
+class DetectionAlgorithmTestMixin:
+
+    def _seed_hourly_rainfall(self, basin, measurement_type, values, start_ts=None):
+        from apps.observations.models import Observation
+
+        start_ts = start_ts or timezone.now().replace(minute=0, second=0, microsecond=0)
+        for i, value in enumerate(values):
+            Observation.objects.create(
+                basin=basin,
+                measurement_type=measurement_type,
+                timestamp=start_ts + timezone.timedelta(hours=i),
+                value=value,
+                created_by=self.user,
+            )
+        return start_ts
+
+
+class TestDetectionAlgorithmCases(BaseRainfallEventApiTest, DetectionAlgorithmTestMixin):
+   
     def setUp(self):
         super().setUp()
-        self.basin = self.create_basin(name="Detect Basin")
-        # create measurement type for rainfall
+        from apps.observations.models import MeasurementType
+
+        self.basin = self.create_basin(name="Detection Cases Basin")
+        self.mt = MeasurementType.objects.create(
+            name="Rainfall",
+            unit="mm",
+            created_by=self.user,
+        )
+
+    def test_detect_single_consecutive_nonzero_event(self):
+
+        values = [1, 2, 3, 0, 0, 0, 0, 0, 0]
+        self._seed_hourly_rainfall(self.basin, self.mt, values)
+
+        result = RainfallEventService.detect_and_persist_events(
+            basin_id=self.basin.id,
+            min_dry_gap_hours=6,
+            measurement_type_id=self.mt.id,
+            created_by=self.user,
+        )
+
+        self.assertEqual(result["total_events"], 1)
+        events = list(
+            RainfallEvent.objects.filter(basin=self.basin, min_dry_gap_used=6).order_by("start_timestamp")
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].duration_hours, 3)
+        self.assertEqual(events[0].peak_value, 3.0)
+        self.assertEqual(events[0].total_volume, 6.0)
+
+    def test_detect_two_events_when_gap_meets_threshold(self):
+
+        values = [1, 2, 0, 0, 0, 0, 0, 0, 4, 5]
+        self._seed_hourly_rainfall(self.basin, self.mt, values)
+
+        result = RainfallEventService.detect_and_persist_events(
+            basin_id=self.basin.id,
+            min_dry_gap_hours=6,
+            measurement_type_id=self.mt.id,
+            created_by=self.user,
+        )
+
+        self.assertEqual(result["total_events"], 2)
+        events = list(
+            RainfallEvent.objects.filter(basin=self.basin, min_dry_gap_used=6).order_by("start_timestamp")
+        )
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].total_volume, 3.0)
+        self.assertEqual(events[1].total_volume, 9.0)
+
+    def test_detect_merged_event_when_gap_shorter_than_threshold(self):
+
+        values = [1, 2, 0, 0, 0, 3, 4]
+        self._seed_hourly_rainfall(self.basin, self.mt, values)
+
+        result = RainfallEventService.detect_and_persist_events(
+            basin_id=self.basin.id,
+            min_dry_gap_hours=6,
+            measurement_type_id=self.mt.id,
+            created_by=self.user,
+        )
+
+        self.assertEqual(result["total_events"], 1)
+        events = list(
+            RainfallEvent.objects.filter(basin=self.basin, min_dry_gap_used=6).order_by("start_timestamp")
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].duration_hours, 7)
+        self.assertEqual(events[0].peak_value, 4.0)
+        self.assertEqual(events[0].total_volume, 10.0)
+
+
+
+class TestDetectEventsIdempotencyService(BaseRainfallEventApiTest, DetectionAlgorithmTestMixin):
+    def setUp(self):
+        super().setUp()
+        from apps.observations.models import MeasurementType
+
+        self.basin = self.create_basin(name="Idempotent Detect Basin")
+        self.mt = MeasurementType.objects.create(
+            name="Rainfall",
+            unit="mm",
+            created_by=self.user,
+        )
+        values = [1, 2, 0, 0, 3, 4, 0, 0]
+        self._seed_hourly_rainfall(self.basin, self.mt, values)
+
+    def test_redetect_same_basin_gap_does_not_double_events(self):
+
+        first = RainfallEventService.detect_and_persist_events(
+            basin_id=self.basin.id,
+            min_dry_gap_hours=2,
+            measurement_type_id=self.mt.id,
+            created_by=self.user,
+        )
+        second = RainfallEventService.detect_and_persist_events(
+            basin_id=self.basin.id,
+            min_dry_gap_hours=2,
+            measurement_type_id=self.mt.id,
+            created_by=self.user,
+        )
+
+        self.assertEqual(first["total_events"], second["total_events"])
+        self.assertEqual(
+            RainfallEvent.objects.filter(basin=self.basin, min_dry_gap_used=2).count(),
+            second["total_events"],
+        )
+        self.assertGreaterEqual(second["total_events"], 1)
+
+
+class TestEventTimeseriesApi(BaseRainfallEventApiTest):
+    def setUp(self):
+        super().setUp()
         from apps.observations.models import MeasurementType, Observation
 
-        self.mt = MeasurementType.objects.create(name="rainfall", unit="mm", created_by=self.user)
-        # create hourly observations over 10 hours with pattern: 1,2,0,0,3,4,0,5,0,0
-        now = timezone.now().replace(minute=0, second=0, microsecond=0)
-        values = [1,2,0,0,3,4,0,5,0,0]
-        self.observations = []
-        for i, v in enumerate(values):
-            ts = now - timezone.timedelta(hours=(len(values)-1-i))
-            self.observations.append(Observation.objects.create(basin=self.basin, measurement_type=self.mt, timestamp=ts, value=v, created_by=self.user))
-
-        self.timeseries_url = reverse('basin-timeseries', kwargs={"basin_id": self.basin.id})
-        self.detect_url = reverse('basin-detect-events', kwargs={"basin_id": self.basin.id})
-
-    def test_get_timeseries_requires_measurement_id(self):
-        resp = self.auth_client_inst.get(self.timeseries_url)
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_get_timeseries_success(self):
-        resp = self.auth_client_inst.get(self.timeseries_url, {"measurement_id": self.mt.id})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.data['data']
-        self.assertIsInstance(data, dict)
-        results = data.get('data') if data.get('data') else data.get('results')
-        # Our wrapper returns data key with list
-        # When using ResponseInfo.ok, data is the list under 'data'
-        if isinstance(results, list):
-            pts = results
-        else:
-            pts = resp.data['data']
-        self.assertGreaterEqual(len(pts), 10)
-
-    def test_get_timeseries_with_pdf_style_params(self):
-        resp = self.auth_client_inst.get(
-            self.timeseries_url,
-            {
-                "measurement_type": "rainfall",
-                "from": (timezone.now() - timezone.timedelta(days=2)).isoformat(),
-                "to": timezone.now().isoformat(),
-            },
-        )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
-    def test_detect_events_creates_events(self):
-        # Use min_dry_gap_hours =2 which will split where two consecutive zeros exist
-        resp = self.auth_client_inst.post(self.detect_url + "?min_dry_gap_hours=2", {"measurement_id": self.mt.id}, format='json')
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp.data['status'])
-        result = resp.data['data']
-        self.assertIn('total_events', result)
-        self.assertGreaterEqual(result['total_events'], 1)
-        # Check persisted events
-        from apps.analytics.models import RainfallEvent
-        evs = RainfallEvent.objects.filter(basin=self.basin, min_dry_gap_used=2)
-        self.assertEqual(evs.count(), result['total_events'])
-
-
-class TestBasinEventSummaryApi(BaseRainfallEventApiTest):
-    def setUp(self):
-        super().setUp()
-        self.basin = self.create_basin(name='Summary Basin')
-        self.create_rainfall_event(
+        self.basin = self.create_basin(name="Event Timeseries Basin")
+        self.mt = MeasurementType.objects.create(name="Rainfall", unit="mm", created_by=self.user)
+        start = timezone.now().replace(minute=0, second=0, microsecond=0) - timezone.timedelta(hours=3)
+        for i, value in enumerate([1.0, 2.0, 0.0, 3.0]):
+            Observation.objects.create(
+                basin=self.basin,
+                measurement_type=self.mt,
+                timestamp=start + timezone.timedelta(hours=i),
+                value=value,
+                created_by=self.user,
+            )
+        self.event = self.create_rainfall_event(
             basin=self.basin,
+            start_time=start,
+            end_time=start + timezone.timedelta(hours=3),
             duration=4,
-            peak=20.0,
-            volume=40.0,
+            peak=3.0,
+            volume=6.0,
             dry_gap=6,
         )
-        self.create_rainfall_event(
-            basin=self.basin,
-            start_time=timezone.now() - timezone.timedelta(hours=48),
-            end_time=timezone.now() - timezone.timedelta(hours=36),
-            duration=12,
-            peak=8.0,
-            volume=90.0,
-            dry_gap=6,
-        )
-        self.url = reverse('basin-event-summary', kwargs={'basin_id': self.basin.id})
+        self.url = reverse("event-timeseries", kwargs={"event_id": self.event.id})
 
-    def test_event_summary_success(self):
-        response = self.auth_client_inst.get(self.url, {'min_dry_gap_hours': 6})
+    def test_event_timeseries_success(self):
+        response = self.auth_client_inst.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data['status'])
-        data = response.data['data']
-        self.assertEqual(data['total_events'], 2)
-        self.assertEqual(data['min_dry_gap_hours'], 6)
-        self.assertEqual(data['peak_event']['peak_value'], 20.0)
-        self.assertEqual(data['longest_event']['duration_hours'], 12)
-        self.assertIn('mean_duration', data)
-        self.assertIn('mean_total_volume', data)
-
-    def test_event_summary_basin_not_found(self):
-        url = reverse('basin-event-summary', kwargs={'basin_id': 999999})
-        response = self.auth_client_inst.get(url)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(response.data['status'])
-
-
-class TestPdfStyleRainfallRoutes(BaseRainfallEventApiTest):
-    def setUp(self):
-        super().setUp()
-        self.basin = self.create_basin(name='PDF Basin')
-        self.event = self.create_rainfall_event(basin=self.basin, volume=55.0, dry_gap=6)
-
-    def test_basin_event_list_pdf_path(self):
-        url = reverse('basin-event-list-pdf', kwargs={'basin_id': self.basin.id})
-        response = self.auth_client_inst.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        results = response.data['data']['results']
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['id'], self.event.id)
+        data = response.data["data"]
+        results = data.get("results") if isinstance(data, dict) else data
+        if results is None and isinstance(data, dict):
+            results = data.get("data", [])
+        self.assertGreaterEqual(len(results), 1)

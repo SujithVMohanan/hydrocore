@@ -1,9 +1,9 @@
 from rest_framework import serializers
+
 from apps.basin.models import Basin
 
 
-class BasinResponseSchemas(serializers.ModelSerializer):
-
+class BasinListSchema(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.full_name', allow_null=True, read_only=True)
     updated_by = serializers.CharField(source='updated_by.full_name', allow_null=True, read_only=True)
 
@@ -20,13 +20,9 @@ class BasinResponseSchemas(serializers.ModelSerializer):
             'updated_at',
         ]
 
-
     def to_representation(self, instance):
-        datas = super().to_representation(instance)
-        for key in datas.keys():
-            try:
-                if datas[key] is None:
-                    datas[key] = ""
-            except KeyError:
-                pass
-        return datas
+        data = super().to_representation(instance)
+        for key, value in data.items():
+            if value is None:
+                data[key] = ""
+        return data

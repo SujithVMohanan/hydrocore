@@ -1,7 +1,4 @@
-import csv
-import io
-import logging
-import time
+import csv,io,logging,time
 from contextlib import contextmanager
 from datetime import datetime, timezone as dt_timezone
 from typing import Iterator, TextIO
@@ -9,7 +6,10 @@ from typing import Iterator, TextIO
 from django.db import transaction
 
 from apps.basin.models import Basin
-from apps.observations.models import MeasurementType, Observation
+from apps.observations.models import (
+    MeasurementType, Observation
+)
+
 from apps.observations.services.ingestion_constants import (
     BATCH_SIZE,
     MEASUREMENT_RAINFALL,
@@ -26,13 +26,12 @@ from apps.observations.services.ingestion_errors import IngestionError, raise_in
 from apps.users.models import Users
 from utils.cache import CacheManager
 
-UTC = dt_timezone.utc
-PROGRESS_EVERY = 25_000
-logger = logging.getLogger(__name__)
+UTC               = dt_timezone.utc
+PROGRESS_EVERY    = 25_000
+logger            = logging.getLogger(__name__)
 
 
 def _log(message: str) -> None:
-    """Write to logger and terminal so progress is always visible."""
     logger.info(message)
     print(f'[ingest] {message}', flush=True)
 

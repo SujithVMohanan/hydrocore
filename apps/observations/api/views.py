@@ -3,7 +3,6 @@ from rest_framework.permissions import IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.response import Response
-from django.db import transaction
 
 from apps.observations.models import (
     MeasurementType, 
@@ -21,9 +20,9 @@ from apps.observations.api.serializers import (
     MeasurementTypeDeleteSerializer,
     IngestObservationsSerializer,
 )
-from apps.observations.api.sechams import (
-    MeasurementTypeResponseSchema,
-    ObservationResponseSchemas,
+from apps.observations.api.schemas import (
+    MeasurementTypeSchema,
+    ObservationListSchema,
 )
 from utils.api_utils import (
     ResponseInfo,
@@ -38,7 +37,7 @@ class GetMeasurementTypesApiView(generics.ListAPIView):
         self.response_format = ResponseInfo().response
         super(GetMeasurementTypesApiView, self).__init__(**kwargs)
 
-    serializer_class   = MeasurementTypeResponseSchema
+    serializer_class   = MeasurementTypeSchema
     permission_classes = [IsAuthenticated]
     pagination_class   = RestPagination
 
@@ -71,13 +70,13 @@ class CreateOrUpdateMeasurementTypeApiView(generics.GenericAPIView):
         super(CreateOrUpdateMeasurementTypeApiView, self).__init__(**kwargs)
 
     serializer_class    = MeasurementTypeCreateUpdateSerializer
-    response_schema     = MeasurementTypeResponseSchema
+    response_schema     = MeasurementTypeSchema
     permission_classes  = [IsAuthenticated]
 
     @swagger_auto_schema(
         tags=["Measurement Types"],
         request_body=MeasurementTypeCreateUpdateSerializer,
-        responses={200: MeasurementTypeResponseSchema, 201: MeasurementTypeResponseSchema},
+        responses={200: MeasurementTypeSchema, 201: MeasurementTypeSchema},
         operation_summary="Create or Update Measurement Type",
         operation_description=(
             "Pass `id` in the request body to update an existing measurement type."
@@ -135,8 +134,8 @@ class DeleteMeasurementTypesApiView(generics.DestroyAPIView):
         self.response_format = ResponseInfo().response
         super(DeleteMeasurementTypesApiView, self).__init__(**kwargs)
 
-    serializer_class = MeasurementTypeDeleteSerializer
-    permission_classes = [IsAuthenticated]
+    serializer_class    = MeasurementTypeDeleteSerializer
+    permission_classes  = [IsAuthenticated]
 
     @swagger_auto_schema(
         tags=["Measurement Types"],
@@ -171,7 +170,7 @@ class GetObservationsApiView(generics.ListAPIView):
         self.response_format = ResponseInfo().response
         super(GetObservationsApiView, self).__init__(**kwargs)
 
-    serializer_class    = ObservationResponseSchemas
+    serializer_class    = ObservationListSchema
     permission_classes  = [IsAuthenticated]
     pagination_class    = RestPagination
 
@@ -217,13 +216,13 @@ class CreateOrUpdateObservationApiView(generics.GenericAPIView):
         super(CreateOrUpdateObservationApiView, self).__init__(**kwargs)
 
     serializer_class    = ObservationCreateUpdateSerializer
-    response_schema     = ObservationResponseSchemas
+    response_schema     = ObservationListSchema
     permission_classes  = [IsAuthenticated]
 
     @swagger_auto_schema(
         tags=["Observations"],
         request_body=ObservationCreateUpdateSerializer,
-        responses={200: ObservationResponseSchemas, 201: ObservationResponseSchemas},
+        responses={200: ObservationListSchema, 201: ObservationListSchema},
         operation_summary="Create or Update Observation",
         operation_description=(
             "Pass `id` in the request body to update an existing observation."

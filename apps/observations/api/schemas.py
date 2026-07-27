@@ -1,13 +1,9 @@
 from rest_framework import serializers
 
-from apps.observations.models import (
-    MeasurementType, 
-    Observation
-)
+from apps.observations.models import MeasurementType, Observation
 
 
-class MeasurementTypeResponseSchema(serializers.ModelSerializer):
-
+class MeasurementTypeSchema(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.full_name', allow_null=True, read_only=True)
     updated_by = serializers.CharField(source='updated_by.full_name', allow_null=True, read_only=True)
 
@@ -24,15 +20,14 @@ class MeasurementTypeResponseSchema(serializers.ModelSerializer):
         ]
 
     def to_representation(self, instance):
-        datas = super().to_representation(instance)
-        for key in datas.keys():
-            if datas[key] is None:
-                datas[key] = ""
-        return datas
+        data = super().to_representation(instance)
+        for key, value in data.items():
+            if value is None:
+                data[key] = ""
+        return data
 
 
-
-class ObservationResponseSchemas(serializers.ModelSerializer):
+class ObservationListSchema(serializers.ModelSerializer):
     
     basin_id              = serializers.CharField(source='basin.basin_id', read_only=True)
     basin_name            = serializers.CharField(source='basin.name', read_only=True)
@@ -61,8 +56,8 @@ class ObservationResponseSchemas(serializers.ModelSerializer):
         ]
 
     def to_representation(self, instance):
-        datas = super().to_representation(instance)
-        for key in datas.keys():
-            if datas[key] is None:
-                datas[key] = ""
-        return datas
+        data = super().to_representation(instance)
+        for key, value in data.items():
+            if value is None:
+                data[key] = ""
+        return data

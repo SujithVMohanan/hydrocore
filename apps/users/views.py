@@ -9,10 +9,11 @@ class DashboardView(TemplateView):
     def get(self, request, *args, **kwargs):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
             try:
-                basin_id = request.GET.get('basin_id')
-                start_date = request.GET.get('start_date')
-                end_date = request.GET.get('end_date')
-                min_dry_gap_hours = request.GET.get('min_dry_gap_hours', 6)
+                
+                basin_id            = request.GET.get('basin_id')
+                start_date          = request.GET.get('start_date')
+                end_date            = request.GET.get('end_date')
+                min_dry_gap_hours   = request.GET.get('min_dry_gap_hours', 6)
 
                 if basin_id is not None:
                     basin_id = str(basin_id).strip()

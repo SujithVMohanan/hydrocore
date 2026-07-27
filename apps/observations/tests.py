@@ -11,7 +11,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.models import Users
 from apps.basin.models import Basin
-from apps.observations.models import MeasurementType, Observation
+from apps.observations.models import (
+    MeasurementType, Observation
+)
 
 
 class BaseObservationApiTest(TestCase):
@@ -376,6 +378,193 @@ class TestDeleteObservationsApi(BaseObservationApiTest):
     def test_delete_observations_missing_ids_fails(self):
         response = self.auth_client_inst.delete(self.url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class TestIngestObservationsApi(BaseObservationApiTest):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("observation-ingest")
+
+    def _csv_upload(self, name: str, content: str):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(
+            name,
+            content.encode("utf-8"),
+            content_type="text/csv",
+        )
+
+    def _rain_csv(self, rows: str = "2019-01-01 01:00:00,1.5,2046\n") -> object:
+        return self._csv_upload(
+            "january_data_rain.csv",
+            "datetime,value,basin\n" + rows,
+        )
+
+    def _temp_csv(self, rows: str = "01/01/2019 1:00,-2.5,2046\n") -> object:
+        return self._csv_upload(
+            "january_data_temp.csv",
+            "Datetime,Value,Basin.ID\n" + rows,
+        )
+
+    def test_ingest_unauthenticated_fails(self):
+        response = self.client.post(
+            self.url,
+            {"rainfall_file": self._rain_csv()},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_ingest_missing_both_files_fails(self):
+        response = self.auth_client_inst.post(self.url, {}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["status"])
+        self.assertEqual(response.data["message"], "Invalid upload request.")
+
+    def test_ingest_non_csv_file_fails(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        bad_file = SimpleUploadedFile(
+            "notes.txt",
+            b"datetime,value,basin\n2019-01-01,1,2046\n",
+            content_type="text/plain",
+        )
+        response = self.auth_client_inst.post(
+            self.url,
+            {"rainfall_file": bad_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["status"])
+        self.assertIn("rainfall_file", response.data["errors"])
+
+    def test_ingest_rainfall_success_auto_creates_basin(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {"rainfall_file": self._rain_csv(), "auto_create_basins": True},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["status"])
+        self.assertEqual(response.data["message"], "Successfully created.")
+        self.assertEqual(response.data["errors"], [])
+
+        self.assertTrue(Basin.objects.filter(basin_id="2046").exists())
+        self.assertTrue(MeasurementType.objects.filter(name="Rainfall").exists())
+        self.assertEqual(
+            Observation.objects.filter(
+                basin__basin_id="2046",
+                measurement_type__name="Rainfall",
+            ).count(),
+            1,
+        )
+
+    def test_ingest_temperature_success(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {"temperature_file": self._temp_csv(), "auto_create_basins": True},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["status"])
+        self.assertTrue(Basin.objects.filter(basin_id="2046").exists())
+        self.assertTrue(MeasurementType.objects.filter(name="Temperature").exists())
+        self.assertEqual(
+            Observation.objects.filter(
+                basin__basin_id="2046",
+                measurement_type__name="Temperature",
+            ).count(),
+            1,
+        )
+
+    def test_ingest_both_files_success(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {
+                "rainfall_file": self._rain_csv(
+                    "2019-01-01 01:00:00,1.5,2046\n2019-01-01 02:00:00,0.0,2046\n"
+                ),
+                "temperature_file": self._temp_csv(
+                    "01/01/2019 1:00,-2.5,2046\n01/01/2019 2:00,-1.0,2046\n"
+                ),
+                "auto_create_basins": True,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["status"])
+        self.assertEqual(
+            Observation.objects.filter(measurement_type__name="Rainfall").count(),
+            2,
+        )
+        self.assertEqual(
+            Observation.objects.filter(measurement_type__name="Temperature").count(),
+            2,
+        )
+
+    def test_ingest_invalid_datetime_returns_ingestion_error(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {
+                "rainfall_file": self._rain_csv("not-a-date,1.5,2046\n"),
+                "auto_create_basins": True,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["status"])
+        self.assertIn("Invalid datetime", response.data["message"])
+        self.assertEqual(len(response.data["errors"]), 1)
+        self.assertEqual(Observation.objects.count(), 0)
+
+    def test_ingest_unknown_basin_without_auto_create_fails(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {
+                "rainfall_file": self._rain_csv("2019-01-01 01:00:00,1.5,9999\n"),
+                "auto_create_basins": False,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["status"])
+        self.assertIn("Unknown basin_id", response.data["message"])
+        self.assertFalse(Basin.objects.filter(basin_id="9999").exists())
+        self.assertEqual(Observation.objects.count(), 0)
+
+    def test_ingest_rainfall_into_existing_basin(self):
+        Basin.objects.create(basin_id="2046", name="Existing Station", created_by=self.user)
+        response = self.auth_client_inst.post(
+            self.url,
+            {
+                "rainfall_file": self._rain_csv(
+                    "2019-01-01 01:00:00,1.5,2046\n2019-01-01 02:00:00,2.0,2046\n"
+                ),
+                "auto_create_basins": False,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Basin.objects.filter(basin_id="2046").count(), 1)
+        self.assertEqual(
+            Observation.objects.filter(basin__basin_id="2046").count(),
+            2,
+        )
+
+    def test_ingest_empty_csv_fails(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {
+                "rainfall_file": self._csv_upload(
+                    "empty_rain.csv",
+                    "datetime,value,basin\n",
+                ),
+                "auto_create_basins": True,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["status"])
+        self.assertIn("No data rows", response.data["message"])
 
 
 class TestIngestObservationsCommand(SimpleTestCase):

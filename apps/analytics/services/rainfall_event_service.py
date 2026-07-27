@@ -5,7 +5,10 @@ from django.utils.dateparse import parse_date, parse_datetime
 
 from datetime import datetime, time as dt_time
 
-from apps.observations.models import Observation, MeasurementType
+from apps.observations.models import (
+    Observation, MeasurementType
+)
+
 from apps.analytics.models import RainfallEvent
 from apps.basin.models import Basin
 from utils.cache import CacheManager
@@ -27,7 +30,7 @@ class RainfallEventService:
 
     @staticmethod
     def _coerce_datetime(value, *, end_of_day: bool = False):
-        """Parse dashboard/API date strings into timezone-aware datetimes."""
+
         if value is None or value == '':
             return None
         if isinstance(value, datetime):
@@ -80,8 +83,8 @@ class RainfallEventService:
         if min_dry_gap_used:
             filter_queryset &= Q(min_dry_gap_used=min_dry_gap_used)
 
-        if min_total_volume is not None:
-            filter_queryset &= Q(total_volume__gte=min_total_volume)
+        if min_total_volume is not None and min_total_volume != "":
+            filter_queryset &= Q(total_volume__gte=float(min_total_volume))
 
         if unique_id:
             filter_queryset &= Q(id=unique_id)
@@ -93,8 +96,9 @@ class RainfallEventService:
                 "updated_by",
             ).filter(filter_queryset).order_by("-id"))
             
-        key = f"basin:{basin_id}:events:{min_dry_gap_used}:{min_total_volume}:{start_timestamp}:{end_timestamp}:{search_query}:{unique_id}"
-        data, _ = CacheManager.get_or_set(key, fetch_data, timeout=3600)
+        key       = f"basin:{basin_id}:events:{min_dry_gap_used}:{min_total_volume}:{start_timestamp}:{end_timestamp}:{search_query}:{unique_id}"
+        data, _   = CacheManager.get_or_set(key, fetch_data, timeout=3600)
+
         return data
 
     @staticmethod
@@ -108,8 +112,8 @@ class RainfallEventService:
 
     @staticmethod
     def get_timeseries(basin_id: int, measurement_type_id: int, start_timestamp=None, end_timestamp=None):
-        start_timestamp = RainfallEventService._coerce_datetime(start_timestamp)
-        end_timestamp = RainfallEventService._coerce_datetime(end_timestamp, end_of_day=True)
+        start_timestamp   = RainfallEventService._coerce_datetime(start_timestamp)
+        end_timestamp     = RainfallEventService._coerce_datetime(end_timestamp, end_of_day=True)
 
         def fetch_data():
             filter_q = Q(basin_id=basin_id, measurement_type_id=measurement_type_id)
@@ -120,9 +124,9 @@ class RainfallEventService:
     
             qs = Observation.objects.filter(filter_q).order_by("timestamp").select_related("measurement_type")
     
-            hour_map = {}
-            first_ts = None
-            last_ts = None
+            hour_map    = {}
+            first_ts    = None
+            last_ts     = None
             for obs in qs:
                 ts = obs.timestamp.replace(minute=0, second=0, microsecond=0)
                 if first_ts is None or ts < first_ts:
@@ -134,16 +138,16 @@ class RainfallEventService:
             if first_ts is None:
                 return []
     
-            start = start_timestamp or first_ts
-            end = end_timestamp or last_ts
-            start = start.replace(minute=0, second=0, microsecond=0)
-            end = end.replace(minute=0, second=0, microsecond=0)
+            start   = start_timestamp or first_ts
+            end     = end_timestamp or last_ts
+            start   = start.replace(minute=0, second=0, microsecond=0)
+            end     = end.replace(minute=0, second=0, microsecond=0)
     
-            events = list(RainfallEvent.objects.filter(basin_id=basin_id, start_timestamp__lte=end, end_timestamp__gte=start).values("id", "start_timestamp", "end_timestamp"))
+            events  = list(RainfallEvent.objects.filter(basin_id=basin_id, start_timestamp__lte=end, end_timestamp__gte=start).values("id", "start_timestamp", "end_timestamp"))
     
-            results = []
-            cur = start
-            measurement_unit = None
+            results             = []
+            cur                 = start
+            measurement_unit    = None
             try:
                 mt = MeasurementType.objects.filter(id=measurement_type_id).first()
                 if mt:
@@ -169,8 +173,9 @@ class RainfallEventService:
     
             return results
 
-        key = f"basin:{basin_id}:timeseries:{measurement_type_id}:{start_timestamp}:{end_timestamp}"
-        data, _ = CacheManager.get_or_set(key, fetch_data, timeout=3600)
+        key       = f"basin:{basin_id}:timeseries:{measurement_type_id}:{start_timestamp}:{end_timestamp}"
+        data, _   = CacheManager.get_or_set(key, fetch_data, timeout=3600)
+
         return data
 
     @staticmethod
@@ -231,21 +236,21 @@ class RainfallEventService:
         if min_dry_gap_hours is None or min_dry_gap_hours < 1:
             raise ValueError("min_dry_gap_hours must be a positive integer")
 
-        start_timestamp = RainfallEventService._coerce_datetime(start_timestamp)
-        end_timestamp = RainfallEventService._coerce_datetime(end_timestamp, end_of_day=True)
+        start_timestamp   = RainfallEventService._coerce_datetime(start_timestamp)
+        end_timestamp     = RainfallEventService._coerce_datetime(end_timestamp, end_of_day=True)
 
-        # load observations aggregated by hour
-        filter_q = Q(basin_id=basin_id, measurement_type_id=measurement_type_id)
+        filter_q          = Q(basin_id=basin_id, measurement_type_id=measurement_type_id)
+
         if start_timestamp:
             filter_q &= Q(timestamp__gte=start_timestamp)
         if end_timestamp:
             filter_q &= Q(timestamp__lte=end_timestamp)
 
-        qs = Observation.objects.filter(filter_q).order_by("timestamp")
+        qs          = Observation.objects.filter(filter_q).order_by("timestamp")
 
-        hour_map = {}
-        first_ts = None
-        last_ts = None
+        hour_map    = {}
+        first_ts    = None
+        last_ts     = None
         for obs in qs:
             ts = obs.timestamp.replace(minute=0, second=0, microsecond=0)
             if first_ts is None or ts < first_ts:
@@ -257,20 +262,19 @@ class RainfallEventService:
         if first_ts is None:
             return {"total_events": 0, "scanned_from": None, "scanned_to": None, "min_dry_gap_hours": min_dry_gap_hours}
 
-        start = start_timestamp or first_ts
-        end = end_timestamp or last_ts
-        start = start.replace(minute=0, second=0, microsecond=0)
-        end = end.replace(minute=0, second=0, microsecond=0)
+        start               = start_timestamp or first_ts
+        end                 = end_timestamp or last_ts
+        start               = start.replace(minute=0, second=0, microsecond=0)
+        end                 = end.replace(minute=0, second=0, microsecond=0)
 
-        # state machine
-        events_to_create = []
-        current_start = None
-        last_non_zero = None
-        total_volume = 0.0
-        peak_value = 0.0
-        dry_streak = 0
+        events_to_create    = []
+        current_start       = None
+        last_non_zero       = None
+        total_volume        = 0.0
+        peak_value          = 0.0
+        dry_streak          = 0
 
-        cur = start
+        cur                 = start
         while cur <= end:
             val = hour_map.get(cur, 0.0)
             if val > 0:
@@ -337,7 +341,6 @@ class RainfallEventService:
                 detected_at=timezone.now(),
             ))
 
-        # delete existing events for basin+gap (idempotency)
         RainfallEvent.objects.filter(basin_id=basin_id, min_dry_gap_used=min_dry_gap_hours).delete()
 
         if events_to_create:
@@ -349,10 +352,7 @@ class RainfallEventService:
 
     @classmethod
     def get_event_summary(cls, basin_id: int, min_dry_gap_hours: int | None = None) -> dict:
-        """
-        Aggregate rainfall-event statistics for a basin.
-        Cached per basin + optional dry-gap filter.
-        """
+        
         if not Basin.objects.filter(id=basin_id).exists():
             raise ValueError('Basin not found.')
 
@@ -411,7 +411,7 @@ class RainfallEventService:
             comparisons.append(summary)
 
         return {
-            "basin_id": basin_id,
-            "comparisons": comparisons,
+            "basin_id"    : basin_id,
+            "comparisons" : comparisons,
         }
 
