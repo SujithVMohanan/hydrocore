@@ -379,7 +379,7 @@ class IngestObservationsApiView(generics.GenericAPIView):
             self.response_format['status'] = True
             self.response_format['message'] = 'Successfully created.'
             self.response_format['data'] = {}
-            self.response_format['errors'] = {}
+            self.response_format['errors'] = []
             return Response(self.response_format, status=status.HTTP_200_OK)
 
         except IngestionError as e:
