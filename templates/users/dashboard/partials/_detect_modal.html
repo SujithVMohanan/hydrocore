@@ -1,0 +1,40 @@
+<div id="detectModal" class="modal-overlay">
+    <div id="detectModalBackdrop" class="modal-backdrop"></div>
+    <div class="modal-panel">
+        <div class="modal-header">
+            <span class="material-symbols-outlined filled">radar</span>
+            Detect Rainfall Events
+        </div>
+        <div class="modal-body">
+            <div class="modal-info">
+                <span class="material-symbols-outlined" style="font-size:20px;flex-shrink:0;margin-top:2px;">info</span>
+                <span>This will scan timeseries data for the selected basin, <strong>detect &amp; persist</strong> rainfall events, then load the dashboard results.</span>
+            </div>
+            <div class="modal-params">
+                <div class="modal-param">
+                    <div class="modal-param__label">Basin</div>
+                    <div class="modal-param__value" id="modal-basin-name">—</div>
+                </div>
+                <div class="modal-param">
+                    <div class="modal-param__label">Dry Gap</div>
+                    <div class="modal-param__value" id="modal-dry-gap">—</div>
+                </div>
+                <div class="modal-param">
+                    <div class="modal-param__label">From</div>
+                    <div class="modal-param__value" id="modal-start">All time</div>
+                </div>
+                <div class="modal-param">
+                    <div class="modal-param__label">To</div>
+                    <div class="modal-param__value" id="modal-end">Now</div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="detectCancelBtn" class="btn btn--ghost btn--sm" type="button">Cancel</button>
+            <button id="detectRunBtn" class="btn btn--primary btn--sm" type="button">
+                <span class="material-symbols-outlined" style="font-size:18px;">analytics</span>
+                Run Analysis
+            </button>
+        </div>
+    </div>
+</div>

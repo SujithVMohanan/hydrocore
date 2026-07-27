@@ -3,6 +3,7 @@ venv
 db.sqlite3
 *.pyc
 debug.log
+.pytest_cache/
 
 /assets
 /media

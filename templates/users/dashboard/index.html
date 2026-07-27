@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+    {% include "users/dashboard/partials/_header.html" %}
+
+    <main class="dashboard-main">
+        <div class="container" style="display:flex;flex-direction:column;gap:24px;">
+            {% include "users/dashboard/partials/_filters.html" %}
+            {% include "users/dashboard/partials/_summary_cards.html" %}
+            {% include "users/dashboard/partials/_chart.html" %}
+            {% include "users/dashboard/partials/_events_table.html" %}
+        </div>
+    </main>
+
+    {% include "users/dashboard/partials/_footer.html" %}
+    {% include "users/dashboard/partials/_detect_modal.html" %}
+    {% include "users/dashboard/partials/_toast.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{% static 'js/dashboard/main.js' %}"></script>
+{% endblock %}

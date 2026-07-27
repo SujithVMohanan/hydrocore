@@ -10,9 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-import os
+import os, datetime
 from pathlib import Path
-from dotenv import load_dotenv, find_dotenv
+from dotenv import (
+    load_dotenv, 
+    find_dotenv
+)
 
 load_dotenv(
     find_dotenv(), 
@@ -50,11 +53,18 @@ ALLOWED_HOSTS = os.environ.get(
 LOCAL_APPS = [
 
     "apps.users",
+    "apps.basin",
+    "apps.observations",
+    "apps.analytics",
     
 ]
 
 THIRD_PARTY_APPS = [
-
+    'channels',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'drf_yasg',
 ]
 
 
@@ -177,3 +187,85 @@ AUTH_USER_MODEL = 'users.Users'
 FIXTURE_DIRS = [
     BASE_DIR / "fixtures",
 ]
+
+
+
+
+SWAGGER_SETTINGS = {
+    'DEFAULT_API_URL' : os.environ.get('SWAGGER_DEFAULT_API_URL', ""),
+    'USE_SESSION_AUTH': False,
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
+    },
+    
+}
+
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'hydrocore.exceptions.exceptions.handle_exception',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 2,
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'utils.jwt_auth.JWTAccessBlacklistAuthentication',
+    ),
+}
+
+INGESTION_SETTINGS = {
+    'BATCH_SIZE'                : int(os.getenv('INGESTION_BATCH_SIZE', 5000)),
+    'MAX_ERRORS_IN_RESPONSE'    : int(os.getenv('INGESTION_MAX_ERRORS_IN_RESPONSE', 100)),
+    'RAIN_REQUIRED_COLUMNS'     : frozenset({'datetime', 'value', 'basin'}),
+    'TEMP_REQUIRED_COLUMNS'     : frozenset({'datetime', 'value', 'basin.id'}),
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': datetime.timedelta(days=20),
+    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(days=50),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': 'eShVmYq3t6w9z$C&E)H@McQfTjWnZr4u7x!A%D*G-JaNdRgUkXp2s5v8y/B?E(H+',
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': datetime.timedelta(days=20),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': datetime.timedelta(days=50),
+}
+
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
+
+
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv("REDIS_LOCATION", "redis://127.0.0.1:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}

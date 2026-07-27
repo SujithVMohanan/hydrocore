@@ -1,0 +1,26 @@
+[
+  {
+    "model": "observations.measurementtype",
+    "pk": 1,
+    "fields": {
+      "name": "Rainfall",
+      "unit": "mm",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z",
+      "created_by": null,
+      "updated_by": null
+    }
+  },
+  {
+    "model": "observations.measurementtype",
+    "pk": 2,
+    "fields": {
+      "name": "Temperature",
+      "unit": "°C",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z",
+      "created_by": null,
+      "updated_by": null
+    }
+  }
+]
