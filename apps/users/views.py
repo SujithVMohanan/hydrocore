@@ -14,9 +14,12 @@ class DashboardView(TemplateView):
                 end_date = request.GET.get('end_date')
                 min_dry_gap_hours = request.GET.get('min_dry_gap_hours', 6)
 
-
-                if basin_id:
-                    basin_id = int(basin_id)
+                if basin_id is not None:
+                    basin_id = str(basin_id).strip()
+                    if basin_id.lower() == 'all':
+                        basin_id = None
+                    elif basin_id:
+                        basin_id = int(basin_id)
                 if min_dry_gap_hours:
                     min_dry_gap_hours = int(min_dry_gap_hours)
 

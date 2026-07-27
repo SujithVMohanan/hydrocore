@@ -240,3 +240,20 @@ class TestDeleteUsersApi(BaseUserApiTest):
         admin = self.make_admin(email="nodelete_admin@example.com")
         self.client.delete(self.url, {"user_ids": [admin.id]}, format="json")
         self.assertTrue(Users.objects.filter(id=admin.id).exists())
+
+
+class TestDashboardView(BaseUserApiTest):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("user-dashboard")
+
+    def test_dashboard_ajax_all_filter_returns_success(self):
+        response = self.client.get(
+            self.url,
+            {"ajax": "1", "basin_id": "all"},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["status"], "success")
+        self.assertEqual(response.json()["data"], {})
