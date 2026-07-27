@@ -1,13 +1,20 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+
 from apps.basin.models import Basin
 from apps.observations.models import MeasurementType
 from apps.analytics.models import RainfallEvent
 from apps.analytics.services.rainfall_event_service import RainfallEventService
 from django.db.models import Avg, Max, Count
-from django.utils.dateparse import parse_datetime
+
 
 class DashboardService:
-    
+
+    @staticmethod
+    def _parse_filter_date(value: Optional[str], *, end_of_day: bool = False):
+        if not value:
+            return None
+        return RainfallEventService._coerce_datetime(value, end_of_day=end_of_day)
+
     @staticmethod
     def get_basins():
         return list(Basin.objects.values('id', 'basin_id', 'name').order_by('-id'))
@@ -17,6 +24,9 @@ class DashboardService:
         
         if not basin_id:
             return {}
+
+        start_dt = DashboardService._parse_filter_date(start_date)
+        end_dt = DashboardService._parse_filter_date(end_date, end_of_day=True)
 
         measurement_types = {
             mt.name.lower(): mt
@@ -40,15 +50,15 @@ class DashboardService:
                 basin_id=basin_id,
                 min_dry_gap_hours=min_dry_gap_hours,
                 measurement_type_id=rainfall_mt.id,
-                start_timestamp=start_date if start_date else None,
-                end_timestamp=end_date if end_date else None
+                start_timestamp=start_dt,
+                end_timestamp=end_dt,
             )
 
             rainfall_timeseries = RainfallEventService.get_timeseries(
                 basin_id=basin_id,
                 measurement_type_id=rainfall_mt.id,
-                start_timestamp=start_date if start_date else None,
-                end_timestamp=end_date if end_date else None
+                start_timestamp=start_dt,
+                end_timestamp=end_dt,
             )
 
             events_qs = RainfallEvent.objects.filter(
@@ -56,10 +66,10 @@ class DashboardService:
                 min_dry_gap_used=min_dry_gap_hours
             )
             
-            if start_date:
-                events_qs = events_qs.filter(start_timestamp__gte=start_date)
-            if end_date:
-                events_qs = events_qs.filter(end_timestamp__lte=end_date)
+            if start_dt:
+                events_qs = events_qs.filter(start_timestamp__gte=start_dt)
+            if end_dt:
+                events_qs = events_qs.filter(end_timestamp__lte=end_dt)
                 
             events_qs = events_qs.order_by('-start_timestamp')
             
@@ -87,8 +97,8 @@ class DashboardService:
             temp_timeseries = RainfallEventService.get_timeseries(
                 basin_id=basin_id,
                 measurement_type_id=temp_mt.id,
-                start_timestamp=start_date if start_date else None,
-                end_timestamp=end_date if end_date else None
+                start_timestamp=start_dt,
+                end_timestamp=end_dt,
             )
 
         for pt in rainfall_timeseries:

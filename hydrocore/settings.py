@@ -211,7 +211,12 @@ REST_FRAMEWORK = {
     ),
 }
 
-
+INGESTION_SETTINGS = {
+    'BATCH_SIZE'                : int(os.getenv('INGESTION_BATCH_SIZE', 2000)),
+    'MAX_ERRORS_IN_RESPONSE'    : int(os.getenv('INGESTION_MAX_ERRORS_IN_RESPONSE', 100)),
+    'RAIN_REQUIRED_COLUMNS'     : frozenset({'datetime', 'value', 'basin'}),
+    'TEMP_REQUIRED_COLUMNS'     : frozenset({'datetime', 'value', 'basin.id'}),
+}
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': datetime.timedelta(days=20),

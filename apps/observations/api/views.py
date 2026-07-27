@@ -12,11 +12,14 @@ from apps.observations.models import (
 
 from apps.observations.services.measurement_type_service import MeasurementTypeService
 from apps.observations.services.observation_service import ObservationService
+from apps.observations.services.ingestion_service import IngestionService
+from apps.observations.services.ingestion_errors import IngestionRowError, format_row_error
 from apps.observations.api.serializers import (
     MeasurementTypeCreateUpdateSerializer,
     ObservationCreateUpdateSerializer,
     ObservationDeleteSerializer,
     MeasurementTypeDeleteSerializer,
+    IngestObservationsSerializer,
 )
 from apps.observations.api.sechams import (
     MeasurementTypeResponseSchema,
@@ -300,5 +303,102 @@ class DeleteObservationsApiView(generics.DestroyAPIView):
             self.response_format['message'] = "Observations deleted successfully."
             return Response(self.response_format, status=status.HTTP_200_OK)
 
+        except Exception as e:
+            return ExceptionHandler.handle(e)
+
+
+class IngestObservationsApiView(generics.GenericAPIView):
+    def __init__(self, **kwargs):
+        self.response_format = ResponseInfo().response
+        super().__init__(**kwargs)
+
+    serializer_class   = IngestObservationsSerializer
+    permission_classes = [IsAuthenticated]
+
+    rainfall_file_param = openapi.Parameter(
+        'rainfall_file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False,
+        description='january_data_rain.csv — columns: datetime, value, basin',
+    )
+    temperature_file_param = openapi.Parameter(
+        'temperature_file', openapi.IN_FORM, type=openapi.TYPE_FILE, required=False,
+        description='january_data_temp.csv — columns: Datetime, Value, Basin.ID',
+    )
+    auto_create_param = openapi.Parameter(
+        'auto_create_basins', openapi.IN_FORM, type=openapi.TYPE_BOOLEAN, required=False,
+        description='Auto-create Basin rows for unknown CSV station IDs (default: true)',
+    )
+
+    @swagger_auto_schema(
+        tags=['Ingestion'],
+        manual_parameters=[rainfall_file_param, temperature_file_param, auto_create_param],
+        operation_summary='Ingest rainfall and/or temperature CSV observations',
+        operation_description=(
+            'Upload one or both exam CSV files. Rows are streamed in batches of 2000. '
+            'Re-uploading the same file updates existing observations (upsert) instead of duplicating.'
+        ),
+        consumes=['multipart/form-data'],
+    )
+    def post(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            if not serializer.is_valid():
+                self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
+                self.response_format['status'] = False
+                self.response_format['errors'] = serializer.errors
+                return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
+
+            auto_create   = serializer.validated_data.get('auto_create_basins', True)
+            user          = request.user if getattr(request.user, 'is_authenticated', False) else None
+            file_results: dict[str, dict] = {}
+
+            rainfall_file = serializer.validated_data.get('rainfall_file')
+            if rainfall_file:
+                file_results['rainfall'] = IngestionService.ingest_rainfall(
+                    rainfall_file,
+                    auto_create_basins=auto_create,
+                    created_by=user,
+                )
+
+            temperature_file = serializer.validated_data.get('temperature_file')
+            if temperature_file:
+                file_results['temperature'] = IngestionService.ingest_temperature(
+                    temperature_file,
+                    auto_create_basins=auto_create,
+                    created_by=user,
+                )
+
+            simple          = IngestionService.build_simple_response(file_results)
+            total_failure   = not simple['success']
+
+            self.response_format['status_code'] = (
+                status.HTTP_400_BAD_REQUEST if total_failure else status.HTTP_200_OK
+            )
+            self.response_format['status'] = simple['success']
+            self.response_format['message'] = simple['message']
+            self.response_format['data'] = simple['data']
+            self.response_format['errors'] = simple['errors']
+            return Response(
+                self.response_format,
+                status=status.HTTP_400_BAD_REQUEST if total_failure else status.HTTP_200_OK,
+            )
+
+        except IngestionRowError as e:
+            err = format_row_error(e, row=None)
+            self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
+            self.response_format['status'] = False
+            self.response_format['message'] = str(e)
+            self.response_format['data'] = {
+                'rows_inserted': 0,
+                'rows_updated': 0,
+                'rows_failed': 0,
+                'rows_saved': 0,
+            }
+            self.response_format['errors'] = [err]
+            return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
+            self.response_format['status'] = False
+            self.response_format['message'] = str(e)
+            return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return ExceptionHandler.handle(e)

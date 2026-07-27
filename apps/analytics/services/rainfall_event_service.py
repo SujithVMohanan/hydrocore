@@ -1,6 +1,9 @@
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
+
+from datetime import datetime, time as dt_time
 
 from apps.observations.models import Observation, MeasurementType
 from apps.analytics.models import RainfallEvent
@@ -9,6 +12,29 @@ from utils.cache import CacheManager
 
 
 class RainfallEventService:
+
+    @staticmethod
+    def _coerce_datetime(value, *, end_of_day: bool = False):
+        """Parse dashboard/API date strings into timezone-aware datetimes."""
+        if value is None or value == '':
+            return None
+        if isinstance(value, datetime):
+            dt = value
+        elif isinstance(value, str):
+            raw = value.strip()
+            dt = parse_datetime(raw)
+            if dt is None:
+                day = parse_date(raw)
+                if day is None:
+                    raise ValueError(f"Invalid date or datetime: '{value}'")
+                clock = dt_time(23, 59, 59) if end_of_day else dt_time.min
+                dt = datetime.combine(day, clock)
+        else:
+            return value
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt
 
     @staticmethod
     def get_rainfall_events(
@@ -66,6 +92,9 @@ class RainfallEventService:
 
     @staticmethod
     def get_timeseries(basin_id: int, measurement_type_id: int, start_timestamp=None, end_timestamp=None):
+        start_timestamp = RainfallEventService._coerce_datetime(start_timestamp)
+        end_timestamp = RainfallEventService._coerce_datetime(end_timestamp, end_of_day=True)
+
         def fetch_data():
             filter_q = Q(basin_id=basin_id, measurement_type_id=measurement_type_id)
             if start_timestamp:
@@ -133,6 +162,9 @@ class RainfallEventService:
     def detect_and_persist_events(basin_id: int, min_dry_gap_hours: int, measurement_type_id: int, created_by=None, start_timestamp=None, end_timestamp=None):
         if min_dry_gap_hours is None or min_dry_gap_hours < 1:
             raise ValueError("min_dry_gap_hours must be a positive integer")
+
+        start_timestamp = RainfallEventService._coerce_datetime(start_timestamp)
+        end_timestamp = RainfallEventService._coerce_datetime(end_timestamp, end_of_day=True)
 
         # load observations aggregated by hour
         filter_q = Q(basin_id=basin_id, measurement_type_id=measurement_type_id)

@@ -111,7 +111,7 @@ class LoginApiView(generics.CreateAPIView):
     serializer_class = LoginUserSerializer
     response_schema  = RegisterUserResponseSchema
 
-    @swagger_auto_schema(tags=["Users"])
+    @swagger_auto_schema(tags=["Authentication"])
     def post(self, request, *args, **kwargs):
         try:
             serializer = self.serializer_class(data=request.data, context={'request': request})
