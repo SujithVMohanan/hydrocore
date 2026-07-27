@@ -212,7 +212,7 @@ REST_FRAMEWORK = {
 }
 
 INGESTION_SETTINGS = {
-    'BATCH_SIZE'                : int(os.getenv('INGESTION_BATCH_SIZE', 2000)),
+    'BATCH_SIZE'                : int(os.getenv('INGESTION_BATCH_SIZE', 5000)),
     'MAX_ERRORS_IN_RESPONSE'    : int(os.getenv('INGESTION_MAX_ERRORS_IN_RESPONSE', 100)),
     'RAIN_REQUIRED_COLUMNS'     : frozenset({'datetime', 'value', 'basin'}),
     'TEMP_REQUIRED_COLUMNS'     : frozenset({'datetime', 'value', 'basin.id'}),

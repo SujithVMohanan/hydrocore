@@ -19,6 +19,7 @@ class RainfallEvent(BaseTimeStamps):
 
     created_by       = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="rainfall_events_created")
     updated_by       = models.ForeignKey("users.Users", on_delete=models.SET_NULL, null=True, blank=True, related_name="rainfall_events_updated")
+    detected_at      = models.DateTimeField(help_text="When the rainfall event was detected/observed",null=True,blank=True,)
 
     class Meta:
         db_table = "rainfall_events"

@@ -1,4 +1,8 @@
-from django.test import TestCase
+import io
+from unittest.mock import patch
+
+from django.core.management import call_command
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -365,3 +369,30 @@ class TestDeleteObservationsApi(BaseObservationApiTest):
     def test_delete_observations_missing_ids_fails(self):
         response = self.auth_client_inst.delete(self.url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class TestIngestObservationsCommand(SimpleTestCase):
+    def test_handle_reports_success_for_each_file(self):
+        stdout = io.StringIO()
+
+        with patch(
+            "apps.observations.management.commands.ingest_observations.Command._open_file",
+            side_effect=lambda *args, **kwargs: io.BytesIO(b"csv"),
+        ), patch(
+            "apps.observations.management.commands.ingest_observations.IngestionService.ingest_rainfall",
+            return_value=None,
+        ), patch(
+            "apps.observations.management.commands.ingest_observations.IngestionService.ingest_temperature",
+            return_value=None,
+        ):
+            call_command(
+                "ingest_observations",
+                rainfall="rain.csv",
+                temperature="temp.csv",
+                stdout=stdout,
+            )
+
+        output = stdout.getvalue()
+        self.assertIn("Ingesting rainfall", output)
+        self.assertIn("Ingesting temperature", output)
+        self.assertIn("Successfully created.", output)

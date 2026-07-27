@@ -13,7 +13,7 @@ from apps.observations.models import (
 from apps.observations.services.measurement_type_service import MeasurementTypeService
 from apps.observations.services.observation_service import ObservationService
 from apps.observations.services.ingestion_service import IngestionService
-from apps.observations.services.ingestion_errors import IngestionRowError, format_row_error
+from apps.observations.services.ingestion_errors import IngestionError
 from apps.observations.api.serializers import (
     MeasurementTypeCreateUpdateSerializer,
     ObservationCreateUpdateSerializer,
@@ -333,8 +333,9 @@ class IngestObservationsApiView(generics.GenericAPIView):
         manual_parameters=[rainfall_file_param, temperature_file_param, auto_create_param],
         operation_summary='Ingest rainfall and/or temperature CSV observations',
         operation_description=(
-            'Upload one or both exam CSV files. Rows are streamed in batches of 2000. '
-            'Re-uploading the same file updates existing observations (upsert) instead of duplicating.'
+            'Upload one or both exam CSV files. '
+            'On success returns a simple success message. '
+            'On any row/file error the API stops and returns the error.'
         ),
         consumes=['multipart/form-data'],
     )
@@ -344,16 +345,17 @@ class IngestObservationsApiView(generics.GenericAPIView):
             if not serializer.is_valid():
                 self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
                 self.response_format['status'] = False
+                self.response_format['message'] = 'Invalid upload request.'
+                self.response_format['data'] = {}
                 self.response_format['errors'] = serializer.errors
                 return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
 
-            auto_create   = serializer.validated_data.get('auto_create_basins', True)
-            user          = request.user if getattr(request.user, 'is_authenticated', False) else None
-            file_results: dict[str, dict] = {}
+            auto_create = serializer.validated_data.get('auto_create_basins', True)
+            user = request.user if getattr(request.user, 'is_authenticated', False) else None
 
             rainfall_file = serializer.validated_data.get('rainfall_file')
             if rainfall_file:
-                file_results['rainfall'] = IngestionService.ingest_rainfall(
+                IngestionService.ingest_rainfall(
                     rainfall_file,
                     auto_create_basins=auto_create,
                     created_by=user,
@@ -361,44 +363,25 @@ class IngestObservationsApiView(generics.GenericAPIView):
 
             temperature_file = serializer.validated_data.get('temperature_file')
             if temperature_file:
-                file_results['temperature'] = IngestionService.ingest_temperature(
+                IngestionService.ingest_temperature(
                     temperature_file,
                     auto_create_basins=auto_create,
                     created_by=user,
                 )
 
-            simple          = IngestionService.build_simple_response(file_results)
-            total_failure   = not simple['success']
+            self.response_format['status_code'] = status.HTTP_200_OK
+            self.response_format['status'] = True
+            self.response_format['message'] = 'Successfully created.'
+            self.response_format['data'] = {}
+            self.response_format['errors'] = {}
+            return Response(self.response_format, status=status.HTTP_200_OK)
 
-            self.response_format['status_code'] = (
-                status.HTTP_400_BAD_REQUEST if total_failure else status.HTTP_200_OK
-            )
-            self.response_format['status'] = simple['success']
-            self.response_format['message'] = simple['message']
-            self.response_format['data'] = simple['data']
-            self.response_format['errors'] = simple['errors']
-            return Response(
-                self.response_format,
-                status=status.HTTP_400_BAD_REQUEST if total_failure else status.HTTP_200_OK,
-            )
-
-        except IngestionRowError as e:
-            err = format_row_error(e, row=None)
+        except IngestionError as e:
             self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
             self.response_format['status'] = False
             self.response_format['message'] = str(e)
-            self.response_format['data'] = {
-                'rows_inserted': 0,
-                'rows_updated': 0,
-                'rows_failed': 0,
-                'rows_saved': 0,
-            }
-            self.response_format['errors'] = [err]
-            return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
-        except ValueError as e:
-            self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
-            self.response_format['status'] = False
-            self.response_format['message'] = str(e)
+            self.response_format['data'] = {}
+            self.response_format['errors'] = [e.as_dict()]
             return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return ExceptionHandler.handle(e)
