@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Avg, Count
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
@@ -12,6 +12,18 @@ from utils.cache import CacheManager
 
 
 class RainfallEventService:
+
+    EVENT_SUMMARY_FIELDS = (
+        'id',
+        'start_timestamp',
+        'end_timestamp',
+        'duration_hours',
+        'peak_value',
+        'total_volume',
+        'min_dry_gap_used',
+        'is_cold_event',
+        'detected_at',
+    )
 
     @staticmethod
     def _coerce_datetime(value, *, end_of_day: bool = False):
@@ -43,6 +55,7 @@ class RainfallEventService:
         start_timestamp: str = None,
         end_timestamp: str = None,
         min_dry_gap_used: int = None,
+        min_total_volume: float = None,
         unique_id: int = None,
     ):
         filter_queryset = Q()
@@ -67,6 +80,9 @@ class RainfallEventService:
         if min_dry_gap_used:
             filter_queryset &= Q(min_dry_gap_used=min_dry_gap_used)
 
+        if min_total_volume is not None:
+            filter_queryset &= Q(total_volume__gte=min_total_volume)
+
         if unique_id:
             filter_queryset &= Q(id=unique_id)
 
@@ -77,7 +93,7 @@ class RainfallEventService:
                 "updated_by",
             ).filter(filter_queryset).order_by("-id"))
             
-        key = f"basin:{basin_id}:events:{min_dry_gap_used}:{start_timestamp}:{end_timestamp}:{search_query}:{unique_id}"
+        key = f"basin:{basin_id}:events:{min_dry_gap_used}:{min_total_volume}:{start_timestamp}:{end_timestamp}:{search_query}:{unique_id}"
         data, _ = CacheManager.get_or_set(key, fetch_data, timeout=3600)
         return data
 
@@ -158,6 +174,58 @@ class RainfallEventService:
         return data
 
     @staticmethod
+    def get_timeseries_by_measurement_name(
+        basin_id: int,
+        measurement_type: str,
+        from_timestamp=None,
+        to_timestamp=None,
+    ):
+        if not measurement_type:
+            raise ValueError("measurement_type is required")
+
+        mt = MeasurementType.objects.filter(name__iexact=measurement_type.strip()).first()
+        if mt is None:
+            raise ValueError("measurement_type not found")
+
+        return RainfallEventService.get_timeseries(
+            basin_id=basin_id,
+            measurement_type_id=mt.id,
+            start_timestamp=from_timestamp,
+            end_timestamp=to_timestamp,
+        )
+
+    @staticmethod
+    def get_event_timeseries(event_id: int):
+        event = RainfallEvent.objects.filter(id=event_id).first()
+        if event is None:
+            raise ValueError("Rainfall event not found.")
+
+        rainfall_mt = MeasurementType.objects.filter(name__iexact="Rainfall").first()
+        if rainfall_mt is None:
+            raise ValueError("Rainfall measurement type not found.")
+
+        return RainfallEventService.get_timeseries(
+            basin_id=event.basin_id,
+            measurement_type_id=rainfall_mt.id,
+            start_timestamp=event.start_timestamp,
+            end_timestamp=event.end_timestamp,
+        )
+
+    @staticmethod
+    def _compute_is_cold_event(basin_id: int, start_timestamp, end_timestamp) -> bool:
+        temp_mt = MeasurementType.objects.filter(name__iexact="Temperature").first()
+        if temp_mt is None:
+            return False
+
+        avg_temp = Observation.objects.filter(
+            basin_id=basin_id,
+            measurement_type_id=temp_mt.id,
+            timestamp__gte=start_timestamp,
+            timestamp__lte=end_timestamp,
+        ).aggregate(avg_value=Avg("value"))["avg_value"]
+        return avg_temp is not None and avg_temp < 0
+
+    @staticmethod
     @transaction.atomic
     def detect_and_persist_events(basin_id: int, min_dry_gap_hours: int, measurement_type_id: int, created_by=None, start_timestamp=None, end_timestamp=None):
         if min_dry_gap_hours is None or min_dry_gap_hours < 1:
@@ -223,6 +291,11 @@ class RainfallEventService:
                         # close event at last_non_zero
                         end_ts = last_non_zero
                         duration_hours = int((end_ts - current_start).total_seconds() / 3600) + 1
+                        is_cold_event = RainfallEventService._compute_is_cold_event(
+                            basin_id=basin_id,
+                            start_timestamp=current_start,
+                            end_timestamp=end_ts,
+                        )
                         events_to_create.append(RainfallEvent(
                             basin_id=basin_id,
                             start_timestamp=current_start,
@@ -231,8 +304,9 @@ class RainfallEventService:
                             peak_value=peak_value,
                             total_volume=total_volume,
                             min_dry_gap_used=min_dry_gap_hours,
-                            is_cold_event=False,
+                            is_cold_event=is_cold_event,
                             created_by=created_by,
+                            detected_at=timezone.now(),
                         ))
                         current_start = None
                         last_non_zero = None
@@ -245,6 +319,11 @@ class RainfallEventService:
         if current_start is not None and last_non_zero is not None:
             end_ts = last_non_zero
             duration_hours = int((end_ts - current_start).total_seconds() / 3600) + 1
+            is_cold_event = RainfallEventService._compute_is_cold_event(
+                basin_id=basin_id,
+                start_timestamp=current_start,
+                end_timestamp=end_ts,
+            )
             events_to_create.append(RainfallEvent(
                 basin_id=basin_id,
                 start_timestamp=current_start,
@@ -253,8 +332,9 @@ class RainfallEventService:
                 peak_value=peak_value,
                 total_volume=total_volume,
                 min_dry_gap_used=min_dry_gap_hours,
-                is_cold_event=False,
+                is_cold_event=is_cold_event,
                 created_by=created_by,
+                detected_at=timezone.now(),
             ))
 
         # delete existing events for basin+gap (idempotency)
@@ -266,3 +346,72 @@ class RainfallEventService:
         CacheManager.invalidate_basin_cache(basin_id)
 
         return {"total_events": len(events_to_create), "scanned_from": start, "scanned_to": end, "min_dry_gap_hours": min_dry_gap_hours}
+
+    @classmethod
+    def get_event_summary(cls, basin_id: int, min_dry_gap_hours: int | None = None) -> dict:
+        """
+        Aggregate rainfall-event statistics for a basin.
+        Cached per basin + optional dry-gap filter.
+        """
+        if not Basin.objects.filter(id=basin_id).exists():
+            raise ValueError('Basin not found.')
+
+        if min_dry_gap_hours is not None and min_dry_gap_hours < 1:
+            raise ValueError('min_dry_gap_hours must be a positive integer.')
+
+        cache_key = f'basin:{basin_id}:event-summary:{min_dry_gap_hours}'
+
+        def fetch_data():
+            qs = RainfallEvent.objects.filter(basin_id=basin_id)
+            if min_dry_gap_hours is not None:
+                qs = qs.filter(min_dry_gap_used=min_dry_gap_hours)
+
+            stats = qs.aggregate(
+                total_events=Count('id'),
+                mean_duration=Avg('duration_hours'),
+                mean_total_volume=Avg('total_volume'),
+            )
+
+            peak_event = (
+                qs.order_by('-peak_value', '-id')
+                .values(*cls.EVENT_SUMMARY_FIELDS)
+                .first()
+            )
+            longest_event = (
+                qs.order_by('-duration_hours', '-id')
+                .values(*cls.EVENT_SUMMARY_FIELDS)
+                .first()
+            )
+
+            return {
+                'basin_id': basin_id,
+                'min_dry_gap_hours': min_dry_gap_hours,
+                'total_events': stats['total_events'] or 0,
+                'mean_duration': round(float(stats['mean_duration'] or 0.0), 2),
+                'mean_total_volume': round(float(stats['mean_total_volume'] or 0.0), 2),
+                'peak_event': peak_event,
+                'longest_event': longest_event,
+            }
+
+        data, _ = CacheManager.get_or_set(cache_key, fetch_data, timeout=3600)
+        return data
+
+    @classmethod
+    def get_event_comparison(cls, basin_id: int, gaps: list[int]) -> dict:
+        if not Basin.objects.filter(id=basin_id).exists():
+            raise ValueError("Basin not found.")
+        if not gaps:
+            raise ValueError("At least one gap value is required.")
+
+        comparisons = []
+        for gap in gaps:
+            if gap < 1:
+                raise ValueError("Gap values must be positive integers.")
+            summary = cls.get_event_summary(basin_id=basin_id, min_dry_gap_hours=gap)
+            comparisons.append(summary)
+
+        return {
+            "basin_id": basin_id,
+            "comparisons": comparisons,
+        }
+

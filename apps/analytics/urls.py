@@ -5,6 +5,9 @@ from apps.analytics.api.views import (
     GetRainfallEventsApiView,
     DeleteRainfallEventsApiView,
     GetTimeseriesApiView,
+    BasinEventSummaryApiView,
+    EventComparisonApiView,
+    EventTimeseriesApiView,
 )
 
 urlpatterns = [
@@ -13,5 +16,9 @@ urlpatterns = [
     path('get-rainfall-events/', GetRainfallEventsApiView.as_view(), name='rainfall-event-list'),
     path('delete-rainfall-events/', DeleteRainfallEventsApiView.as_view(), name='rainfall-event-delete'),
     path('basins/<int:basin_id>/timeseries/', GetTimeseriesApiView.as_view(), name='basin-timeseries'),
+    path('basins/<int:basin_id>/events/', GetRainfallEventsApiView.as_view(), name='basin-event-list'),
     path('basins/<int:basin_id>/detect-events/', DetectRainfallEventsApiView.as_view(), name='basin-detect-events'),
+    path('basins/<int:basin_id>/event-summary/', BasinEventSummaryApiView.as_view(), name='basin-event-summary'),
+    path('basins/<int:basin_id>/event-comparison/', EventComparisonApiView.as_view(), name='basin-event-comparison'),
+    path('events/<int:event_id>/timeseries/', EventTimeseriesApiView.as_view(), name='event-timeseries'),
 ]

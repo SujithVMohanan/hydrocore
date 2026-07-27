@@ -113,6 +113,13 @@ class TestGetRainfallEventsApi(BaseRainfallEventApiTest):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], self.event1.id)
 
+    def test_filter_by_min_total_volume(self):
+        response = self.auth_client_inst.get(self.url, {"min_total_volume": 180})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["data"]["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], self.event2.id)
+
 
 class TestDeleteRainfallEventsApi(BaseRainfallEventApiTest):
     def setUp(self):
@@ -179,6 +186,17 @@ class TestTimeseriesAndDetectApi(BaseRainfallEventApiTest):
             pts = resp.data['data']
         self.assertGreaterEqual(len(pts), 10)
 
+    def test_get_timeseries_with_pdf_style_params(self):
+        resp = self.auth_client_inst.get(
+            self.timeseries_url,
+            {
+                "measurement_type": "rainfall",
+                "from": (timezone.now() - timezone.timedelta(days=2)).isoformat(),
+                "to": timezone.now().isoformat(),
+            },
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
     def test_detect_events_creates_events(self):
         # Use min_dry_gap_hours =2 which will split where two consecutive zeros exist
         resp = self.auth_client_inst.post(self.detect_url + "?min_dry_gap_hours=2", {"measurement_id": self.mt.id}, format='json')
@@ -191,3 +209,59 @@ class TestTimeseriesAndDetectApi(BaseRainfallEventApiTest):
         from apps.analytics.models import RainfallEvent
         evs = RainfallEvent.objects.filter(basin=self.basin, min_dry_gap_used=2)
         self.assertEqual(evs.count(), result['total_events'])
+
+
+class TestBasinEventSummaryApi(BaseRainfallEventApiTest):
+    def setUp(self):
+        super().setUp()
+        self.basin = self.create_basin(name='Summary Basin')
+        self.create_rainfall_event(
+            basin=self.basin,
+            duration=4,
+            peak=20.0,
+            volume=40.0,
+            dry_gap=6,
+        )
+        self.create_rainfall_event(
+            basin=self.basin,
+            start_time=timezone.now() - timezone.timedelta(hours=48),
+            end_time=timezone.now() - timezone.timedelta(hours=36),
+            duration=12,
+            peak=8.0,
+            volume=90.0,
+            dry_gap=6,
+        )
+        self.url = reverse('basin-event-summary', kwargs={'basin_id': self.basin.id})
+
+    def test_event_summary_success(self):
+        response = self.auth_client_inst.get(self.url, {'min_dry_gap_hours': 6})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['status'])
+        data = response.data['data']
+        self.assertEqual(data['total_events'], 2)
+        self.assertEqual(data['min_dry_gap_hours'], 6)
+        self.assertEqual(data['peak_event']['peak_value'], 20.0)
+        self.assertEqual(data['longest_event']['duration_hours'], 12)
+        self.assertIn('mean_duration', data)
+        self.assertIn('mean_total_volume', data)
+
+    def test_event_summary_basin_not_found(self):
+        url = reverse('basin-event-summary', kwargs={'basin_id': 999999})
+        response = self.auth_client_inst.get(url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data['status'])
+
+
+class TestPdfStyleRainfallRoutes(BaseRainfallEventApiTest):
+    def setUp(self):
+        super().setUp()
+        self.basin = self.create_basin(name='PDF Basin')
+        self.event = self.create_rainfall_event(basin=self.basin, volume=55.0, dry_gap=6)
+
+    def test_basin_event_list_pdf_path(self):
+        url = reverse('basin-event-list-pdf', kwargs={'basin_id': self.basin.id})
+        response = self.auth_client_inst.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data['data']['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], self.event.id)

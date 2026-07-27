@@ -185,10 +185,14 @@ class GetObservationsApiView(generics.ListAPIView):
                                 description="Filter observations at or after this timestamp")
     end_timestamp = openapi.Parameter('end_timestamp', openapi.IN_QUERY, type=openapi.TYPE_STRING, required=False,
                                 description="Filter observations at or before this timestamp")
+    value_above = openapi.Parameter('value_above', openapi.IN_QUERY, type=openapi.TYPE_NUMBER, required=False,
+                                description="Filter observations with value greater than or equal to this threshold")
+    value_below = openapi.Parameter('value_below', openapi.IN_QUERY, type=openapi.TYPE_NUMBER, required=False,
+                                description="Filter observations with value less than or equal to this threshold")
     id = openapi.Parameter('id', openapi.IN_QUERY, type=openapi.TYPE_INTEGER, required=False,
                                 description="Single observation ID to fetch specific details")
 
-    @swagger_auto_schema(tags=["Observations"], manual_parameters=[search, basin_id, measurement_type_id, start_timestamp, end_timestamp, id], pagination_class=RestPagination)
+    @swagger_auto_schema(tags=["Observations"], manual_parameters=[search, basin_id, measurement_type_id, start_timestamp, end_timestamp, value_above, value_below, id], pagination_class=RestPagination)
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
@@ -199,6 +203,8 @@ class GetObservationsApiView(generics.ListAPIView):
             measurement_type_id=self.request.query_params.get('measurement_type_id'),
             start_timestamp=self.request.query_params.get('start_timestamp'),
             end_timestamp=self.request.query_params.get('end_timestamp'),
+            value_above=self.request.query_params.get('value_above'),
+            value_below=self.request.query_params.get('value_below'),
             unique_id=self.request.query_params.get('id'),
         )
 

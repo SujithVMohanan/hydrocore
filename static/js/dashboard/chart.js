@@ -7,9 +7,9 @@ import { prepareChartData } from './chart-data.js';
 /** Clear, consistent palette — blue = rain, orange = temperature */
 export const COLORS = {
     rain: {
-        bar: '#2563eb',
-        barLight: '#60a5fa',
-        barHover: '#1d4ed8',
+        line: '#2563eb',
+        lineLight: '#60a5fa',
+        fill: 'rgba(37, 99, 235, 0.16)',
         grid: 'rgba(37, 99, 235, 0.08)',
         axis: '#1e40af',
         label: 'Rainfall (mm)',
@@ -22,8 +22,15 @@ export const COLORS = {
         axis: '#c2410c',
         label: 'Temperature (°C)',
     },
-    event: { bg: 'rgba(250, 204, 21, 0.22)', border: '#eab308' },
-    heavy: { bg: 'rgba(74, 222, 128, 0.22)', border: '#22c55e' },
+    eventPalette: [
+        { bg: 'rgba(250, 204, 21, 0.20)', border: '#eab308' },
+        { bg: 'rgba(125, 211, 252, 0.20)', border: '#38bdf8' },
+        { bg: 'rgba(196, 181, 253, 0.20)', border: '#8b5cf6' },
+        { bg: 'rgba(251, 146, 60, 0.18)', border: '#f97316' },
+        { bg: 'rgba(244, 114, 182, 0.18)', border: '#ec4899' },
+        { bg: 'rgba(45, 212, 191, 0.18)', border: '#14b8a6' },
+    ],
+    heavyBoost: { bg: 'rgba(74, 222, 128, 0.24)', border: '#22c55e' },
 };
 
 function getTickColor() {
@@ -97,7 +104,7 @@ function updateLayoutVisibility() {
     if (state.chartLayoutMode === 'combined') {
         split?.classList.add('hidden');
         combined?.classList.remove('hidden');
-        if (subtitle) subtitle.textContent = 'Combined view — rain (bars) and temperature (line) together';
+        if (subtitle) subtitle.textContent = 'Combined view — rain and temperature together as lines';
     } else {
         split?.classList.remove('hidden');
         combined?.classList.add('hidden');
@@ -125,7 +132,7 @@ function updateChartStats(rainData, tempData, mode) {
     const combSub = document.getElementById('combinedChartSubtitle');
     if (rainSub) rainSub.textContent = `Total rainfall ${modeLabel} (mm)`;
     if (tempSub) tempSub.textContent = `Average temperature ${modeLabel} (°C)`;
-    if (combSub) combSub.textContent = `Grouped ${modeLabel} · Blue = rain · Orange = temp · Yellow = event · Green = heavy rain`;
+    if (combSub) combSub.textContent = `Grouped ${modeLabel} · Blue = rain · Orange = temp · Event windows use different colors`;
 
     const rainHtml = rainData.length
         ? `<span class="stat-label">Rain total</span><span class="stat-value">${rainTotal.toFixed(1)} mm</span>` : '—';
@@ -161,8 +168,8 @@ export function renderRainfallChart(rainfallData, events, mode = 'daily') {
     const labels = rainfallData.map(d => d.timestamp);
     const values = rainfallData.map(d => d.value);
     const gradient = ctx.createLinearGradient(0, 0, 0, 280);
-    gradient.addColorStop(0, isDarkMode() ? COLORS.rain.barLight : COLORS.rain.bar);
-    gradient.addColorStop(1, 'rgba(37, 99, 235, 0.12)');
+    gradient.addColorStop(0, isDarkMode() ? 'rgba(96, 165, 250, 0.30)' : COLORS.rain.fill);
+    gradient.addColorStop(1, 'transparent');
 
     if (state.rainfallChart) state.rainfallChart.destroy();
 
@@ -180,17 +187,22 @@ export function renderRainfallChart(rainfallData, events, mode = 'daily') {
     };
 
     state.rainfallChart = new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: {
             labels,
             datasets: [{
                 label: COLORS.rain.label,
                 data: values,
                 backgroundColor: gradient,
-                borderColor: COLORS.rain.bar,
-                borderWidth: 1.5,
-                borderRadius: 6,
-                barPercentage: 0.65,
+                borderColor: COLORS.rain.line,
+                borderWidth: 3,
+                fill: true,
+                tension: 0.28,
+                pointRadius: mode === 'daily' ? 3 : 4,
+                pointHoverRadius: 5,
+                pointBackgroundColor: COLORS.rain.line,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
             }],
         },
         options: opts,
@@ -283,22 +295,26 @@ export function renderCombinedChart(rainfallData, tempData, events, mode = 'dail
     const tempMap = Object.fromEntries(tempData.map(d => [d.timestamp, d.value]));
 
     const rainGradient = ctx.createLinearGradient(0, 0, 0, 400);
-    rainGradient.addColorStop(0, isDarkMode() ? COLORS.rain.barLight : COLORS.rain.bar);
-    rainGradient.addColorStop(1, 'rgba(37, 99, 235, 0.1)');
+    rainGradient.addColorStop(0, isDarkMode() ? 'rgba(96, 165, 250, 0.28)' : COLORS.rain.fill);
+    rainGradient.addColorStop(1, 'transparent');
 
     if (state.combinedChart) state.combinedChart.destroy();
 
     const datasets = [{
         label: COLORS.rain.label,
         data: allLabels.map(t => rainMap[t] ?? null),
-        type: 'bar',
+        type: 'line',
         backgroundColor: rainGradient,
-        borderColor: COLORS.rain.bar,
-        borderWidth: 1.5,
-        borderRadius: 5,
+        borderColor: COLORS.rain.line,
+        borderWidth: 3,
+        fill: true,
+        tension: 0.28,
+        pointRadius: 3,
+        pointBackgroundColor: COLORS.rain.line,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
         yAxisID: 'yRain',
         order: 2,
-        barPercentage: 0.55,
     }];
 
     if (tempData.length) {
@@ -324,7 +340,7 @@ export function renderCombinedChart(rainfallData, tempData, events, mode = 'dail
     opts.plugins.annotation = { annotations: buildEventAnnotations(events, allLabels, mode) };
     opts.plugins.tooltip.callbacks = {
         label: (c) => {
-            if (c.dataset.yAxisID === 'yRain' || c.dataset.type === 'bar') {
+            if (c.dataset.yAxisID === 'yRain') {
                 return c.parsed.y != null ? ` 💧 Rainfall: ${c.parsed.y} mm` : '';
             }
             const v = c.parsed.y;
@@ -349,7 +365,7 @@ export function renderCombinedChart(rainfallData, tempData, events, mode = 'dail
     };
 
     state.combinedChart = new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: { labels: allLabels, datasets },
         options: opts,
     });
@@ -376,10 +392,10 @@ function buildLegend(showRain, showTemp) {
                 if (showRain) {
                     items.push({
                         text: COLORS.rain.label,
-                        fillStyle: COLORS.rain.bar,
-                        strokeStyle: COLORS.rain.bar,
-                        lineWidth: 0,
-                        pointStyle: 'rectRounded',
+                        fillStyle: COLORS.rain.line,
+                        strokeStyle: COLORS.rain.line,
+                        lineWidth: 2,
+                        pointStyle: 'line',
                         hidden: false,
                         index: 0,
                     });
@@ -407,6 +423,7 @@ function buildEventAnnotations(events, labels, mode) {
         const startDate = new Date(ev.start_timestamp);
         const endDate = new Date(ev.end_timestamp);
         const isHeavy = Number(ev.peak_value) >= 10;
+        const palette = getEventPalette(idx, isHeavy);
         let startIdx = -1, endIdx = -1;
 
         labels.forEach((label, i) => {
@@ -428,22 +445,31 @@ function buildEventAnnotations(events, labels, mode) {
             xMin: startIdx - 0.4,
             xMax: endIdx + 0.4,
             yScaleID: state.chartLayoutMode === 'combined' ? 'yRain' : 'y',
-            backgroundColor: isHeavy ? COLORS.heavy.bg : COLORS.event.bg,
-            borderColor: isHeavy ? COLORS.heavy.border : COLORS.event.border,
+            backgroundColor: palette.bg,
+            borderColor: palette.border,
             borderWidth: 1.5,
             borderDash: isHeavy ? [6, 3] : [4, 4],
             label: {
                 display: events.length <= 8,
-                content: isHeavy ? '⚡ Heavy rain' : '🌧 Rain event',
+                content: isHeavy ? `⚡ Event ${idx + 1}` : `🌧 Event ${idx + 1}`,
                 position: 'start',
                 font: { size: 9, weight: 'bold' },
-                color: isHeavy ? COLORS.heavy.border : COLORS.event.border,
+                color: palette.border,
                 backgroundColor: 'rgba(255,255,255,0.92)',
                 padding: 4,
             },
         };
     });
     return annotations;
+}
+
+function getEventPalette(idx, isHeavy) {
+    const base = COLORS.eventPalette[idx % COLORS.eventPalette.length];
+    if (!isHeavy) return base;
+    return {
+        bg: base.bg,
+        border: COLORS.heavyBoost.border,
+    };
 }
 
 function parseChartLabel(label, mode) {

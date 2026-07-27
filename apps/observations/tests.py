@@ -255,6 +255,13 @@ class TestGetObservationsApi(BaseObservationApiTest):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], self.obs1.id)
 
+    def test_filter_observations_by_value_thresholds(self):
+        response = self.auth_client_inst.get(self.url, {"value_above": 26, "value_below": 30})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data["data"]["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["id"], self.obs2.id)
+
 
 class TestCreateOrUpdateObservationApi(BaseObservationApiTest):
     def setUp(self):

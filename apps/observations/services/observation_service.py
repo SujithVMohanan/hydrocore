@@ -86,6 +86,8 @@ class ObservationService:
         measurement_type_id: int = None,
         start_timestamp: str = None,
         end_timestamp: str = None,
+        value_above: float = None,
+        value_below: float = None,
         unique_id: int = None,
     ):
         filter_queryset = Q()
@@ -109,6 +111,12 @@ class ObservationService:
 
         if end_timestamp:
             filter_queryset &= Q(timestamp__lte=end_timestamp)
+
+        if value_above is not None:
+            filter_queryset &= Q(value__gte=value_above)
+
+        if value_below is not None:
+            filter_queryset &= Q(value__lte=value_below)
 
         if unique_id:
             filter_queryset &= Q(id=unique_id)

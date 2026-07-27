@@ -53,7 +53,7 @@ urlpatterns = [
     # API Endpoints 
     re_path(r'^api/', include([
 
-        path('users/', include('apps.users.urls')),
+        path('users/', include('apps.users.api.urls')),
         path('basin/', include('apps.basin.urls')),
         path('observations/', include('apps.observations.urls')),
         path('analytics/', include('apps.analytics.urls')),
