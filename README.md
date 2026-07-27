@@ -152,12 +152,28 @@ Content-Type: application/json
 }
 ```
 
-Copy the `access` token from the response.  
-Use it in other APIs as:
+Copy the `token` (access) and `refresh_token` from the response.  
+Use the access token in other APIs as:
 
 ```
 Authorization: Bearer <access_token>
 ```
+
+**Logout** (expires both access and refresh tokens)
+
+```
+POST http://127.0.0.1:8000/api/users/logout/
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "refresh_token": "<refresh_token_from_login>"
+}
+```
+
+After logout:
+- the **refresh token** is blacklisted (cannot get new access tokens)
+- the **access token** is marked expired in Redis (cannot call protected APIs anymore)
 
 ---
 
@@ -356,6 +372,7 @@ This is a **page URL** from `apps/users/urls.py` (not under `/api/`).
 | Action | Method | URL |
 |--------|--------|-----|
 | Login | POST | `/api/users/login/` |
+| Logout | POST | `/api/users/logout/` |
 | Register | POST | `/api/users/register-user/` |
 | List users | GET | `/api/users/get-users/` |
 | Create/update user | POST | `/api/users/create-or-update-user/` |

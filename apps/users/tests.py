@@ -105,6 +105,74 @@ class TestLoginApi(BaseUserApiTest):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class TestLogoutApi(BaseUserApiTest):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("user-logout")
+        self.user = self.make_user(email="logout@example.com", password="Logout@1234")
+        self.refresh = RefreshToken.for_user(self.user)
+        self.access = str(self.refresh.access_token)
+        self.refresh_str = str(self.refresh)
+        self.auth_client_inst = APIClient()
+        self.auth_client_inst.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access}")
+
+    def test_logout_success_expires_access_token(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {"refresh_token": self.refresh_str},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["status"])
+        self.assertIn("expired", response.data["message"].lower())
+
+        # Same access token must no longer work on protected APIs
+        protected = reverse("user-list")
+        after = self.auth_client_inst.get(protected)
+        self.assertEqual(after.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_unauthenticated_fails(self):
+        response = self.client.post(
+            self.url,
+            {"refresh_token": self.refresh_str},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_missing_refresh_token_fails(self):
+        response = self.auth_client_inst.post(self.url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["status"])
+
+    def test_logout_invalid_refresh_token_fails(self):
+        response = self.auth_client_inst.post(
+            self.url,
+            {"refresh_token": "not-a-valid-token"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["status"])
+
+    def test_logout_twice_with_same_refresh_fails(self):
+        first = self.auth_client_inst.post(
+            self.url,
+            {"refresh_token": self.refresh_str},
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+
+        # Need a fresh access token to call logout again (old one is blacklisted)
+        new_refresh = RefreshToken.for_user(self.user)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(new_refresh.access_token)}")
+        second = client.post(
+            self.url,
+            {"refresh_token": self.refresh_str},
+            format="json",
+        )
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class TestGetUsersApi(BaseUserApiTest):
     def setUp(self):
         super().setUp()

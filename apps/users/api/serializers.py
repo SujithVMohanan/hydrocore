@@ -52,6 +52,14 @@ class UserDeleteSerializer(serializers.Serializer):
     user_ids = IntegerListField(required=True)
 
 
+class LogoutUserSerializer(serializers.Serializer):
+
+    refresh_token = serializers.CharField(
+        required=True,
+        help_text="Refresh token returned at login/register. It will be blacklisted on logout.",
+    )
+
+
 class CreateOrUpdateUserSerializer(serializers.Serializer):
 
     user_id        = serializers.IntegerField(required=False, allow_null=True)

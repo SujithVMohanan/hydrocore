@@ -4,6 +4,7 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from apps.users.models import Users
 from apps.users.services.user_service import UserService
 from utils.api_utils import (
@@ -11,6 +12,7 @@ from utils.api_utils import (
     RestPagination
 
 )
+from utils.jwt_blacklist import logout_tokens
 
 from apps.users.api.schemas import (
     CreateOrUpdateUserResponseSchema,
@@ -21,6 +23,7 @@ from apps.users.api.schemas import (
 from apps.users.api.serializers import (
     CreateOrUpdateUserSerializer,
     LoginUserSerializer,
+    LogoutUserSerializer,
     RegisterUserSerializer,
     UserDeleteSerializer,
 )
@@ -141,6 +144,66 @@ class LoginApiView(generics.CreateAPIView):
         except Exception as e:
             return ExceptionHandler.handle(e)
 
+
+
+        except Exception as e:
+            return ExceptionHandler.handle(e)
+
+
+
+class LogoutApiView(generics.GenericAPIView):
+    def __init__(self, **kwargs):
+        self.response_format = ResponseInfo().response
+        super().__init__(**kwargs)
+
+    serializer_class    = LogoutUserSerializer
+    permission_classes  = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        tags=["Authentication"],
+        request_body=LogoutUserSerializer,
+        operation_summary="Logout and expire tokens",
+        operation_description=(
+            "Requires `Authorization: Bearer <access_token>`.\n\n"
+            "Pass the `refresh_token` from login/register in the body. "
+            "Both the access token and refresh token are expired/blacklisted so they cannot be reused."
+        ),
+    )
+    def post(self, request, *args, **kwargs):
+        try:
+            serializer = self.serializer_class(data=request.data)
+            if not serializer.is_valid():
+                self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
+                self.response_format['status'] = False
+                self.response_format['errors'] = serializer.errors
+                return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
+
+            auth_header  = request.META.get('HTTP_AUTHORIZATION', '')
+            access_token = None
+            if auth_header.lower().startswith('bearer '):
+                access_token = auth_header.split(' ', 1)[1].strip()
+
+            try:
+                logout_tokens(
+                    access_token=access_token,
+                    refresh_token=serializer.validated_data['refresh_token'],
+                )
+            except TokenError as exc:
+                self.response_format['status_code'] = status.HTTP_400_BAD_REQUEST
+                self.response_format['status'] = False
+                self.response_format['message'] = str(exc)
+                self.response_format['errors'] = {'refresh_token': [str(exc)]}
+                return Response(self.response_format, status=status.HTTP_400_BAD_REQUEST)
+
+            self.response_format['status_code'] = status.HTTP_200_OK
+            self.response_format['status'] = True
+            self.response_format['message'] = "Logout successful. Tokens have been expired."
+            self.response_format['data'] = {}
+            self.response_format['errors'] = []
+            return Response(self.response_format, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return ExceptionHandler.handle(e)
 
 
 class DeleteUsersApiView(generics.DestroyAPIView):
