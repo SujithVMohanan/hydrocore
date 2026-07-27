@@ -28,18 +28,23 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root with your database and Redis settings, for example:
+Create a `.env` file in the project root with your settings, for example:
 
 ```env
-DB_ENGINE         = django.db.backends.mysql
-DB_NAME           = hydrocore
-DB_USER           = root
-DB_PASSWORD       = your_password
-DB_HOST           = 127.0.0.1
-DB_PORT           = 3306
-REDIS_LOCATION    = redis://127.0.0.1:6379/1
+SECRET_KEY=""
+DEBUG=True
+ALLOWED_HOSTS="127.0.0.1,localhost"
+DB_ENGINE="django.db.backends.mysql"
+DB_NAME="hydrocore_db"
+DB_USER="root"
+DB_PASSWORD="yourpassword"
+DB_HOST="127.0.0.1"
+DB_PORT="3306"
+SWAGGER_DEFAULT_API_URL="http://127.0.0.1:8000/"
+REDIS_LOCATION="redis://127.0.0.1:6379/1"
 ```
 
+Replace `SECRET_KEY`, `DB_PASSWORD`, and other values with your own.
 ---
 
 ## 3. Start Redis (required)
